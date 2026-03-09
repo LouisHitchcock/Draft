@@ -13,7 +13,7 @@ import type {
   ServerProviderStatus,
   ServerProviderStatusState,
 } from "@t3tools/contracts";
-import { Effect, Layer, Option, Result, Stream } from "effect";
+import { Effect, Fiber, Layer, Option, Result, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import {
@@ -478,11 +478,15 @@ export const checkKimiProviderStatus: Effect.Effect<
 export const ProviderHealthLive = Layer.effect(
   ProviderHealth,
   Effect.gen(function* () {
-    const codexStatus = yield* checkCodexProviderStatus;
-    const copilotStatus = yield* checkCopilotProviderStatus;
-    const kimiStatus = yield* checkKimiProviderStatus;
+    const providerStatusesFiber = yield* Effect.all(
+      [checkCodexProviderStatus, checkCopilotProviderStatus, checkKimiProviderStatus],
+      { concurrency: "unbounded" },
+    ).pipe(
+      Effect.forkScoped,
+    );
+
     return {
-      getStatuses: Effect.succeed([codexStatus, copilotStatus, kimiStatus]),
+      getStatuses: Fiber.join(providerStatusesFiber),
     } satisfies ProviderHealthShape;
   }),
 );
