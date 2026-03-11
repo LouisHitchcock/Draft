@@ -25,8 +25,11 @@ const showContextMenuFallbackMock =
       position?: { x: number; y: number },
     ) => Promise<T | null>
   >();
+type MockTransportState = "connecting" | "open" | "reconnecting" | "closed" | "disposed";
 const channelListeners = new Map<string, Set<(message: WsPush) => void>>();
 const latestPushByChannel = new Map<string, WsPush>();
+const transportStateListeners = new Set<(state: MockTransportState) => void>();
+let transportState: MockTransportState = "connecting";
 const subscribeMock = vi.fn<
   (
     channel: string,
@@ -49,13 +52,26 @@ const subscribeMock = vi.fn<
   };
 });
 
+const subscribeStateMock = vi.fn<
+  (listener: (state: MockTransportState) => void) => () => void
+>((listener) => {
+  transportStateListeners.add(listener);
+  return () => {
+    transportStateListeners.delete(listener);
+  };
+});
+
 vi.mock("./wsTransport", () => {
   return {
     WsTransport: class MockWsTransport {
       request = requestMock;
       subscribe = subscribeMock;
+      subscribeState = subscribeStateMock;
       getLatestPush(channel: string) {
         return latestPushByChannel.get(channel) ?? null;
+      }
+      getState() {
+        return transportState;
       }
     },
   };
@@ -79,6 +95,13 @@ function emitPush<C extends WsPushChannel>(channel: C, data: WsPushData<C>): voi
   if (!listeners) return;
   for (const listener of listeners) {
     listener(message);
+  }
+}
+
+function emitTransportState(next: MockTransportState): void {
+  transportState = next;
+  for (const listener of transportStateListeners) {
+    listener(next);
   }
 }
 
@@ -107,8 +130,11 @@ beforeEach(() => {
   requestMock.mockReset();
   showContextMenuFallbackMock.mockReset();
   subscribeMock.mockClear();
+  subscribeStateMock.mockClear();
   channelListeners.clear();
   latestPushByChannel.clear();
+  transportStateListeners.clear();
+  transportState = "connecting";
   nextPushSequence = 1;
   Reflect.deleteProperty(getWindowForTest(), "desktopBridge");
 });
@@ -118,6 +144,29 @@ afterEach(() => {
 });
 
 describe("wsNativeApi", () => {
+  it("exposes websocket connection state snapshots and subscriptions", async () => {
+    const { createWsNativeApi, getServerConnectionState, subscribeServerConnectionState } =
+      await import("./wsNativeApi");
+
+    createWsNativeApi();
+    const listener = vi.fn();
+    const unsubscribe = subscribeServerConnectionState(listener);
+
+    expect(getServerConnectionState()).toBe("connecting");
+
+    emitTransportState("open");
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(getServerConnectionState()).toBe("open");
+
+    emitTransportState("reconnecting");
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(getServerConnectionState()).toBe("reconnecting");
+
+    unsubscribe();
+    emitTransportState("closed");
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
   it("delivers and caches valid server.welcome payloads", async () => {
     const { createWsNativeApi, onServerWelcome } = await import("./wsNativeApi");
 

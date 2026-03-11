@@ -6,13 +6,14 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Throttler } from "@tanstack/react-pacer";
 
 import { isElectron } from "../env";
 import { APP_DISPLAY_NAME } from "../branding";
 import { Button } from "../components/ui/button";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { AnchoredToastProvider, ToastProvider, toastManager } from "../components/ui/toast";
 import { serverConfigQueryOptions, serverQueryKeys } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
@@ -21,7 +22,12 @@ import { useStore } from "../store";
 import { useTerminalStateStore } from "../terminalStateStore";
 import { preferredTerminalEditor } from "../terminal-links";
 import { terminalRunningSubprocessFromEvent } from "../terminalActivity";
-import { onServerConfigUpdated, onServerWelcome } from "../wsNativeApi";
+import {
+  getServerConnectionState,
+  onServerConfigUpdated,
+  onServerWelcome,
+  subscribeServerConnectionState,
+} from "../wsNativeApi";
 import { providerQueryKeys } from "../lib/providerReactQuery";
 import { projectQueryKeys } from "../lib/projectReactQuery";
 import { collectActiveTerminalThreadIds } from "../lib/terminalStateCleanup";
@@ -52,11 +58,72 @@ function RootRouteView() {
   return (
     <ToastProvider>
       <AnchoredToastProvider>
+        <ServerConnectionBanner />
         <EventRouter />
         <DesktopProjectBootstrap />
         <Outlet />
       </AnchoredToastProvider>
     </ToastProvider>
+  );
+}
+
+function ServerConnectionBanner() {
+  const connectionState = useSyncExternalStore(
+    subscribeServerConnectionState,
+    getServerConnectionState,
+    () => "connecting",
+  );
+  const [showConnecting, setShowConnecting] = useState(false);
+
+  useEffect(() => {
+    if (connectionState !== "connecting") {
+      setShowConnecting(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setShowConnecting(true);
+    }, 1_200);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [connectionState]);
+
+  const shouldShow =
+    connectionState === "reconnecting" ||
+    connectionState === "closed" ||
+    (connectionState === "connecting" && showConnecting);
+
+  if (!shouldShow) {
+    return null;
+  }
+
+  const retrying = connectionState === "reconnecting" || connectionState === "closed";
+
+  return (
+    <div className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center px-3 sm:px-6">
+      <Alert
+        variant={retrying ? "warning" : "info"}
+        className="pointer-events-auto w-full max-w-2xl border-border/80 bg-background/95 shadow-lg backdrop-blur"
+      >
+        <div>
+          <AlertTitle>{retrying ? "Connection lost" : "Connecting to local server"}</AlertTitle>
+          <AlertDescription>
+            <p>
+              {retrying
+                ? "The app is retrying the websocket connection automatically. If this keeps happening, restart the local dev server."
+                : "The app is waiting for the local server before live data and actions become available."}
+            </p>
+          </AlertDescription>
+        </div>
+        <AlertAction>
+          <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+            Reload app
+          </Button>
+        </AlertAction>
+      </Alert>
+    </div>
   );
 }
 

@@ -10,11 +10,22 @@ import {
 } from "@t3tools/contracts";
 
 import { showContextMenuFallback } from "./contextMenuFallback";
-import { WsTransport } from "./wsTransport";
+import { type TransportState, WsTransport } from "./wsTransport";
 
 let instance: { api: NativeApi; transport: WsTransport } | null = null;
 const welcomeListeners = new Set<(payload: WsWelcomePayload) => void>();
 const serverConfigUpdatedListeners = new Set<(payload: ServerConfigUpdatedPayload) => void>();
+const serverConnectionStateListeners = new Set<() => void>();
+
+function emitServerConnectionStateChange(): void {
+  for (const listener of serverConnectionStateListeners) {
+    try {
+      listener();
+    } catch {
+      // Swallow listener errors
+    }
+  }
+}
 
 /**
  * Subscribe to the server welcome message. If a welcome was already received
@@ -62,10 +73,26 @@ export function onServerConfigUpdated(
   };
 }
 
+export function subscribeServerConnectionState(listener: () => void): () => void {
+  serverConnectionStateListeners.add(listener);
+
+  return () => {
+    serverConnectionStateListeners.delete(listener);
+  };
+}
+
+export function getServerConnectionState(): TransportState {
+  return instance?.transport.getState() ?? "connecting";
+}
+
 export function createWsNativeApi(): NativeApi {
   if (instance) return instance.api;
 
   const transport = new WsTransport();
+
+  transport.subscribeState(() => {
+    emitServerConnectionStateChange();
+  });
 
   transport.subscribe(WS_CHANNELS.serverWelcome, (message) => {
     const payload = message.data;

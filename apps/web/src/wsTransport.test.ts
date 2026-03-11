@@ -85,6 +85,23 @@ afterEach(() => {
 });
 
 describe("WsTransport", () => {
+  it("notifies state listeners when the websocket state changes", () => {
+    const transport = new WsTransport("ws://localhost:3020");
+    const socket = getSocket();
+
+    const listener = vi.fn();
+    const unsubscribe = transport.subscribeState(listener);
+
+    socket.open();
+    socket.close();
+
+    expect(listener).toHaveBeenNthCalledWith(1, "open");
+    expect(listener).toHaveBeenNthCalledWith(2, "closed");
+
+    unsubscribe();
+    transport.dispose();
+  });
+
   it("routes valid push envelopes to channel listeners", () => {
     const transport = new WsTransport("ws://localhost:3020");
     const socket = getSocket();
