@@ -15,6 +15,7 @@ import {
   type ResolvedKeybindingsConfig,
   type ProviderApprovalDecision,
   type ServerCopilotUsage,
+  type ServerProviderMcpStatus,
   type ServerProviderStatus,
   type ProviderKind,
   type ThreadId,
@@ -57,6 +58,7 @@ import {
   serverQueryKeys,
 } from "~/lib/serverReactQuery";
 import { formatCopilotRequestCost } from "~/lib/copilotBilling";
+import { buildComposerMcpServerItems } from "../mcpServers";
 
 import { isElectron } from "../env";
 import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
@@ -280,6 +282,7 @@ const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const EMPTY_PROJECT_ENTRIES: ProjectEntry[] = [];
 const EMPTY_AVAILABLE_EDITORS: EditorId[] = [];
 const EMPTY_PROVIDER_STATUSES: ServerProviderStatus[] = [];
+const EMPTY_PROVIDER_MCP_STATUSES: ServerProviderMcpStatus[] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
 const COMPOSER_PATH_QUERY_DEBOUNCE_MS = 120;
 const SCRIPT_TERMINAL_COLS = 120;
@@ -495,6 +498,15 @@ type ComposerCommandItem =
       label: string;
       description: string;
       showFastBadge: boolean;
+    }
+  | {
+      id: string;
+      type: "mcp-server";
+      provider: ProviderKind;
+      serverName: string;
+      state: "enabled" | "disabled";
+      label: string;
+      description: string;
     };
 
 type SendPhase = "idle" | "preparing-worktree" | "sending-turn";
@@ -609,11 +621,29 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           model
         </Badge>
       ) : null}
+      {props.item.type === "mcp-server" ? (
+        <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+          mcp
+        </Badge>
+      ) : null}
       <span className="flex min-w-0 items-center gap-1.5 truncate">
         {props.item.type === "model" && props.item.showFastBadge ? (
           <ZapIcon className="size-3.5 shrink-0 text-amber-500" />
         ) : null}
         <span className="truncate">{props.item.label}</span>
+        {props.item.type === "mcp-server" ? (
+          <Badge
+            variant="outline"
+            className={cn(
+              "shrink-0 px-1.5 py-0 text-[10px]",
+              props.item.state === "enabled"
+                ? "border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                : "text-muted-foreground/80",
+            )}
+          >
+            {props.item.state}
+          </Badge>
+        ) : null}
       </span>
       <span className="truncate text-muted-foreground/70 text-xs">{props.item.description}</span>
     </CommandItem>
@@ -656,7 +686,9 @@ const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
               ? "Searching workspace files..."
               : props.triggerKind === "path"
                 ? "No matching files or folders."
-                : "No matching command."}
+                : props.triggerKind === "slash-mcp"
+                  ? "No MCP servers configured for this provider."
+                  : "No matching command."}
           </p>
         )}
       </div>
@@ -1506,6 +1538,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
     }),
   );
   const workspaceEntries = workspaceEntriesQuery.data?.entries ?? EMPTY_PROJECT_ENTRIES;
+  const providerMcpStatuses = serverConfigQuery.data?.mcpServers ?? EMPTY_PROVIDER_MCP_STATUSES;
+  const composerMcpProvider: ProviderKind = useMemo(() => {
+    const provider = activeThread?.session?.provider;
+    return provider === "codex" || provider === "copilot" || provider === "kimi"
+      ? provider
+      : selectedProvider;
+  }, [activeThread?.session?.provider, selectedProvider]);
   const composerMenuItems = useMemo<ComposerCommandItem[]>(() => {
     if (!composerTrigger) return [];
     if (composerTrigger.kind === "path") {
@@ -1536,6 +1575,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
           description: "Switch this thread into plan mode",
         },
         {
+          id: "slash:mcp",
+          type: "slash-command",
+          command: "mcp",
+          label: "/mcp",
+          description: "Show MCP servers for the active provider",
+        },
+        {
           id: "slash:default",
           type: "slash-command",
           command: "default",
@@ -1550,6 +1596,22 @@ export default function ChatView({ threadId }: ChatViewProps) {
       return slashCommandItems.filter(
         (item) => item.command.includes(query) || item.label.slice(1).includes(query),
       );
+    }
+
+    if (composerTrigger.kind === "slash-mcp") {
+      return buildComposerMcpServerItems({
+        provider: composerMcpProvider,
+        providerMcpStatuses,
+        query: composerTrigger.query,
+      }).map((item) => ({
+        id: item.id,
+        type: "mcp-server",
+        provider: item.provider,
+        serverName: item.name,
+        state: item.state,
+        label: item.name,
+        description: item.description,
+      }));
     }
 
     return searchableModelOptions
@@ -1570,7 +1632,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
         showFastBadge:
           provider === "codex" && shouldShowFastTierIcon(slug, selectedServiceTierSetting),
       }));
-  }, [composerTrigger, searchableModelOptions, selectedServiceTierSetting, workspaceEntries]);
+  }, [
+    composerMcpProvider,
+    composerTrigger,
+    providerMcpStatuses,
+    searchableModelOptions,
+    selectedServiceTierSetting,
+    workspaceEntries,
+  ]);
   const composerMenuOpen = Boolean(composerTrigger);
   const activeComposerMenuItem = useMemo(
     () =>
@@ -3669,13 +3738,26 @@ export default function ChatView({ threadId }: ChatViewProps) {
           }
           return;
         }
-        void handleInteractionModeChange(item.command === "plan" ? "plan" : "default");
+        if (item.command === "mcp") {
+          const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "/mcp ", {
+            expectedText: expectedToken,
+          });
+          if (applied) {
+            setComposerHighlightedItemId(null);
+          }
+          return;
+        }
+        const nextMode = item.command === "plan" ? "plan" : "default";
+        void handleInteractionModeChange(nextMode);
         const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
           expectedText: expectedToken,
         });
         if (applied) {
           setComposerHighlightedItemId(null);
         }
+        return;
+      }
+      if (item.type === "mcp-server") {
         return;
       }
       onProviderModelSelect(item.provider, item.model);

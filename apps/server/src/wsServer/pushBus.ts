@@ -6,7 +6,7 @@ import {
 } from "@t3tools/contracts";
 import { Deferred, Effect, Queue, Ref, Schema } from "effect";
 import type { Scope } from "effect";
-import type { WebSocket } from "ws";
+import { WebSocket } from "ws";
 
 type PushTarget =
   | { readonly kind: "all" }
@@ -60,7 +60,7 @@ export const makeServerPushBus = (input: {
         Effect.map((message) => {
           let recipientCount = 0;
           for (const client of recipients) {
-            if (client.readyState !== client.OPEN) {
+            if (client.readyState !== WebSocket.OPEN) {
               continue;
             }
             client.send(message);

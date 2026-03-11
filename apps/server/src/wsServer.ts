@@ -25,6 +25,7 @@ import {
   WS_METHODS,
   type ServerCopilotReasoningProbe,
   type ServerCopilotReasoningProbeInput,
+  type ServerProviderMcpStatus,
   WebSocketRequest,
   type WsResponse as WsResponseMessage,
   WsResponse,
@@ -83,6 +84,7 @@ import { CopilotAcpManager, readCopilotReasoningEffortSelector } from "./copilot
 import { makeServerPushBus } from "./wsServer/pushBus.ts";
 import { makeServerReadiness } from "./wsServer/readiness.ts";
 import { decodeJsonResult, formatSchemaError } from "@t3tools/shared/schemaJson";
+import { listCodexMcpServerStatuses } from "./codexMcpServerStatus.ts";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -414,6 +416,25 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   }
 
   const providerStatuses = yield* providerHealth.getStatuses;
+  let mcpServersCache: ReadonlyArray<ServerProviderMcpStatus> | null = null;
+  const getMcpServers = () =>
+    Effect.gen(function* () {
+      if (mcpServersCache) {
+        return mcpServersCache;
+      }
+      const mcpServers = [
+        {
+          provider: "codex" as const,
+          servers: yield* Effect.tryPromise(() => listCodexMcpServerStatuses()).pipe(
+            Effect.orElseSucceed(() => []),
+          ),
+        },
+        { provider: "copilot" as const, servers: [] },
+        { provider: "kimi" as const, servers: [] },
+      ] as const;
+      mcpServersCache = mcpServers;
+      return mcpServers;
+    });
   const clients = yield* Ref.make(new Set<WebSocket>());
   const logger = createLogger("ws");
   const readiness = yield* makeServerReadiness;
@@ -1160,6 +1181,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           keybindings: keybindingsConfig.keybindings,
           issues: keybindingsConfig.issues,
           providers: providerStatuses,
+          mcpServers: yield* getMcpServers(),
           availableEditors,
         };
 

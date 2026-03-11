@@ -45,6 +45,18 @@ describe("detectComposerTrigger", () => {
     });
   });
 
+  it("detects slash mcp query after /mcp", () => {
+    const text = "/mcp play";
+    const trigger = detectComposerTrigger(text, text.length);
+
+    expect(trigger).toEqual({
+      kind: "slash-mcp",
+      query: "play",
+      rangeStart: 0,
+      rangeEnd: text.length,
+    });
+  });
+
   it("detects non-model slash commands while typing", () => {
     const text = "/pl";
     const trigger = detectComposerTrigger(text, text.length);

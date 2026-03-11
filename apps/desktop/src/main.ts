@@ -379,6 +379,10 @@ function resolveBackendEntry(): string {
 }
 
 function resolveBackendCwd(): string {
+  const override = process.env.T3CODE_BACKEND_CWD?.trim();
+  if (override) {
+    return override;
+  }
   if (!app.isPackaged) {
     return resolveAppRoot();
   }

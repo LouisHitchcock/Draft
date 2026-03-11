@@ -7,9 +7,10 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
-import { QueryClient, useQueryClient } from "@tanstack/react-query";
+import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Throttler } from "@tanstack/react-pacer";
 
+import { isElectron } from "../env";
 import { APP_DISPLAY_NAME } from "../branding";
 import { Button } from "../components/ui/button";
 import { AnchoredToastProvider, ToastProvider, toastManager } from "../components/ui/toast";
@@ -318,6 +319,43 @@ function EventRouter() {
 }
 
 function DesktopProjectBootstrap() {
-  // Desktop hydration runs through EventRouter project + orchestration sync.
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const { data: serverConfig } = useQuery(serverConfigQueryOptions());
+  const projects = useStore((store) => store.projects);
+  const threads = useStore((store) => store.threads);
+  const threadsHydrated = useStore((store) => store.threadsHydrated);
+  const restoredThreadIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isElectron || pathname !== "/" || !threadsHydrated) {
+      return;
+    }
+
+    const cwd = serverConfig?.cwd ?? null;
+    const activeProjectId = cwd
+      ? (projects.find((project) => project.cwd === cwd)?.id ?? null)
+      : null;
+    const candidateThreads = threads.filter((thread) =>
+      activeProjectId ? thread.projectId === activeProjectId : true,
+    );
+    const latestThread = candidateThreads.toSorted((left, right) => {
+      const byCreated = new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+      if (byCreated !== 0) return byCreated;
+      return right.id.localeCompare(left.id);
+    })[0];
+
+    if (!latestThread || restoredThreadIdRef.current === latestThread.id) {
+      return;
+    }
+
+    restoredThreadIdRef.current = latestThread.id;
+    void navigate({
+      to: "/$threadId",
+      params: { threadId: latestThread.id },
+      replace: true,
+    });
+  }, [navigate, pathname, projects, serverConfig?.cwd, threads, threadsHydrated]);
+
   return null;
 }

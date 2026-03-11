@@ -46,6 +46,36 @@ export type ServerProviderStatus = typeof ServerProviderStatus.Type;
 
 const ServerProviderStatuses = Schema.Array(ServerProviderStatus);
 const NonNegativeNumber = Schema.Number.check(Schema.isGreaterThanOrEqualTo(0));
+export const ServerMcpServerStatusState = Schema.Literals(["enabled", "disabled"]);
+export type ServerMcpServerStatusState = typeof ServerMcpServerStatusState.Type;
+
+export const ServerMcpServerAuthStatus = Schema.Literals([
+  "unsupported",
+  "not_logged_in",
+  "bearer_token",
+  "o_auth",
+  "unknown",
+]);
+export type ServerMcpServerAuthStatus = typeof ServerMcpServerAuthStatus.Type;
+
+export const ServerMcpServerStatus = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  enabled: Schema.Boolean,
+  state: ServerMcpServerStatusState,
+  authStatus: ServerMcpServerAuthStatus,
+  toolCount: NonNegativeNumber,
+  resourceCount: NonNegativeNumber,
+  resourceTemplateCount: NonNegativeNumber,
+});
+export type ServerMcpServerStatus = typeof ServerMcpServerStatus.Type;
+
+export const ServerProviderMcpStatus = Schema.Struct({
+  provider: ProviderKind,
+  servers: Schema.Array(ServerMcpServerStatus),
+});
+export type ServerProviderMcpStatus = typeof ServerProviderMcpStatus.Type;
+
+const ServerProviderMcpStatuses = Schema.Array(ServerProviderMcpStatus);
 
 export const ServerCopilotUsageSource = Schema.Literal("copilot_internal_user");
 export type ServerCopilotUsageSource = typeof ServerCopilotUsageSource.Type;
@@ -114,6 +144,7 @@ export const ServerConfig = Schema.Struct({
   keybindings: ResolvedKeybindingsConfig,
   issues: ServerConfigIssues,
   providers: ServerProviderStatuses,
+  mcpServers: Schema.optional(ServerProviderMcpStatuses),
   availableEditors: Schema.Array(EditorId),
 });
 export type ServerConfig = typeof ServerConfig.Type;
