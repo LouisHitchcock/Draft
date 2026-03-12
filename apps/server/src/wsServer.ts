@@ -28,7 +28,9 @@ import {
   type ServerProviderMcpStatus,
   WebSocketRequest,
   type WsResponse as WsResponseMessage,
+  type WsRpcMethod,
   WsResponse,
+  WsRpcResultSchemaByMethod,
   type WsPushEnvelopeBase,
 } from "@t3tools/contracts";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -295,6 +297,13 @@ function stripRequestTag<T extends { _tag: string }>(body: T) {
 
 const encodeWsResponse = Schema.encodeEffect(Schema.fromJsonString(WsResponse));
 const decodeWebSocketRequest = decodeJsonResult(WebSocketRequest);
+
+function getWsRpcResultSchema(method: string): Schema.Schema<unknown> | null {
+  if (!(method in WsRpcResultSchemaByMethod)) {
+    return null;
+  }
+  return WsRpcResultSchemaByMethod[method as WsRpcMethod] as Schema.Schema<unknown>;
+}
 
 export type ServerCoreRuntimeServices =
   | OrchestrationEngineService
@@ -1237,6 +1246,24 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       return yield* sendWsResponse({
         id: request.success.id,
         error: { message: Cause.pretty(result.cause) },
+      });
+    }
+
+    const resultSchema = getWsRpcResultSchema(request.success.body._tag);
+    if (resultSchema !== null) {
+      const decodedResult = Schema.decodeUnknownExit(resultSchema as never)(result.value);
+      if (Exit.isFailure(decodedResult)) {
+        return yield* sendWsResponse({
+          id: request.success.id,
+          error: {
+            message: `Invalid response payload for ${request.success.body._tag}: ${formatSchemaError(decodedResult.cause)}`,
+          },
+        });
+      }
+
+      return yield* sendWsResponse({
+        id: request.success.id,
+        result: decodedResult.value,
       });
     }
 

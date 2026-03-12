@@ -2,12 +2,32 @@ import {
   ORCHESTRATION_WS_CHANNELS,
   ORCHESTRATION_WS_METHODS,
   type ContextMenuItem,
+  DispatchResult,
+  GitCreateWorktreeResult,
+  GitListBranchesResult,
+  GitPreparePullRequestThreadResult,
+  GitPullResult,
+  GitResolvePullRequestResult,
+  GitRunStackedActionResult,
+  GitStatusResult,
   type NativeApi,
+  OrchestrationGetFullThreadDiffResult,
+  OrchestrationGetSnapshotResult,
+  OrchestrationGetTurnDiffResult,
+  OrchestrationReplayEventsResult,
+  ProjectSearchEntriesResult,
+  ProjectWriteFileResult,
   ServerConfigUpdatedPayload,
+  ServerConfig,
+  ServerCopilotReasoningProbe,
+  ServerCopilotUsage,
+  ServerUpsertKeybindingResult,
+  TerminalSessionSnapshot,
   WS_CHANNELS,
   WS_METHODS,
   type WsWelcomePayload,
 } from "@t3tools/contracts";
+import { Schema } from "effect";
 
 import { showContextMenuFallback } from "./contextMenuFallback";
 import { type TransportState, WsTransport } from "./wsTransport";
@@ -93,6 +113,8 @@ export function createWsNativeApi(): NativeApi {
   if (instance) return instance.api;
 
   const transport = new WsTransport();
+  const requestWithSchema = <T>(method: string, schema: Schema.Schema<T>, params?: unknown) =>
+    transport.request(method, params, { resultSchema: schema });
 
   transport.subscribeState(() => {
     emitServerConnectionStateChange();
@@ -133,22 +155,25 @@ export function createWsNativeApi(): NativeApi {
       },
     },
     terminal: {
-      open: (input) => transport.request(WS_METHODS.terminalOpen, input),
-      write: (input) => transport.request(WS_METHODS.terminalWrite, input),
-      resize: (input) => transport.request(WS_METHODS.terminalResize, input),
-      clear: (input) => transport.request(WS_METHODS.terminalClear, input),
-      restart: (input) => transport.request(WS_METHODS.terminalRestart, input),
-      close: (input) => transport.request(WS_METHODS.terminalClose, input),
+      open: (input) => requestWithSchema(WS_METHODS.terminalOpen, TerminalSessionSnapshot, input),
+      write: (input) => requestWithSchema(WS_METHODS.terminalWrite, Schema.Void, input),
+      resize: (input) => requestWithSchema(WS_METHODS.terminalResize, Schema.Void, input),
+      clear: (input) => requestWithSchema(WS_METHODS.terminalClear, Schema.Void, input),
+      restart: (input) =>
+        requestWithSchema(WS_METHODS.terminalRestart, TerminalSessionSnapshot, input),
+      close: (input) => requestWithSchema(WS_METHODS.terminalClose, Schema.Void, input),
       onEvent: (callback) =>
         transport.subscribe(WS_CHANNELS.terminalEvent, (message) => callback(message.data)),
     },
     projects: {
-      searchEntries: (input) => transport.request(WS_METHODS.projectsSearchEntries, input),
-      writeFile: (input) => transport.request(WS_METHODS.projectsWriteFile, input),
+      searchEntries: (input) =>
+        requestWithSchema(WS_METHODS.projectsSearchEntries, ProjectSearchEntriesResult, input),
+      writeFile: (input) =>
+        requestWithSchema(WS_METHODS.projectsWriteFile, ProjectWriteFileResult, input),
     },
     shell: {
       openInEditor: (cwd, editor) =>
-        transport.request(WS_METHODS.shellOpenInEditor, { cwd, editor }),
+        requestWithSchema(WS_METHODS.shellOpenInEditor, Schema.Void, { cwd, editor }),
       openExternal: async (url) => {
         if (window.desktopBridge) {
           const opened = await window.desktopBridge.openExternal(url);
@@ -164,18 +189,27 @@ export function createWsNativeApi(): NativeApi {
       },
     },
     git: {
-      pull: (input) => transport.request(WS_METHODS.gitPull, input),
-      status: (input) => transport.request(WS_METHODS.gitStatus, input),
-      runStackedAction: (input) => transport.request(WS_METHODS.gitRunStackedAction, input),
-      listBranches: (input) => transport.request(WS_METHODS.gitListBranches, input),
-      createWorktree: (input) => transport.request(WS_METHODS.gitCreateWorktree, input),
-      removeWorktree: (input) => transport.request(WS_METHODS.gitRemoveWorktree, input),
-      createBranch: (input) => transport.request(WS_METHODS.gitCreateBranch, input),
-      checkout: (input) => transport.request(WS_METHODS.gitCheckout, input),
-      init: (input) => transport.request(WS_METHODS.gitInit, input),
-      resolvePullRequest: (input) => transport.request(WS_METHODS.gitResolvePullRequest, input),
+      pull: (input) => requestWithSchema(WS_METHODS.gitPull, GitPullResult, input),
+      status: (input) => requestWithSchema(WS_METHODS.gitStatus, GitStatusResult, input),
+      runStackedAction: (input) =>
+        requestWithSchema(WS_METHODS.gitRunStackedAction, GitRunStackedActionResult, input),
+      listBranches: (input) =>
+        requestWithSchema(WS_METHODS.gitListBranches, GitListBranchesResult, input),
+      createWorktree: (input) =>
+        requestWithSchema(WS_METHODS.gitCreateWorktree, GitCreateWorktreeResult, input),
+      removeWorktree: (input) =>
+        requestWithSchema(WS_METHODS.gitRemoveWorktree, Schema.Void, input),
+      createBranch: (input) => requestWithSchema(WS_METHODS.gitCreateBranch, Schema.Void, input),
+      checkout: (input) => requestWithSchema(WS_METHODS.gitCheckout, Schema.Void, input),
+      init: (input) => requestWithSchema(WS_METHODS.gitInit, Schema.Void, input),
+      resolvePullRequest: (input) =>
+        requestWithSchema(WS_METHODS.gitResolvePullRequest, GitResolvePullRequestResult, input),
       preparePullRequestThread: (input) =>
-        transport.request(WS_METHODS.gitPreparePullRequestThread, input),
+        requestWithSchema(
+          WS_METHODS.gitPreparePullRequestThread,
+          GitPreparePullRequestThreadResult,
+          input,
+        ),
     },
     contextMenu: {
       show: async <T extends string>(
@@ -189,21 +223,39 @@ export function createWsNativeApi(): NativeApi {
       },
     },
     server: {
-      getConfig: () => transport.request(WS_METHODS.serverGetConfig),
-      getCopilotUsage: () => transport.request(WS_METHODS.serverGetCopilotUsage),
+      getConfig: () => requestWithSchema(WS_METHODS.serverGetConfig, ServerConfig),
+      getCopilotUsage: () =>
+        requestWithSchema(WS_METHODS.serverGetCopilotUsage, ServerCopilotUsage),
       probeCopilotReasoning: (input) =>
-        transport.request(WS_METHODS.serverProbeCopilotReasoning, input),
-      upsertKeybinding: (input) => transport.request(WS_METHODS.serverUpsertKeybinding, input),
+        requestWithSchema(
+          WS_METHODS.serverProbeCopilotReasoning,
+          ServerCopilotReasoningProbe,
+          input,
+        ),
+      upsertKeybinding: (input) =>
+        requestWithSchema(WS_METHODS.serverUpsertKeybinding, ServerUpsertKeybindingResult, input),
     },
     orchestration: {
-      getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),
+      getSnapshot: () =>
+        requestWithSchema(ORCHESTRATION_WS_METHODS.getSnapshot, OrchestrationGetSnapshotResult),
       dispatchCommand: (command) =>
-        transport.request(ORCHESTRATION_WS_METHODS.dispatchCommand, { command }),
-      getTurnDiff: (input) => transport.request(ORCHESTRATION_WS_METHODS.getTurnDiff, input),
+        requestWithSchema(ORCHESTRATION_WS_METHODS.dispatchCommand, DispatchResult, { command }),
+      getTurnDiff: (input) =>
+        requestWithSchema(
+          ORCHESTRATION_WS_METHODS.getTurnDiff,
+          OrchestrationGetTurnDiffResult,
+          input,
+        ),
       getFullThreadDiff: (input) =>
-        transport.request(ORCHESTRATION_WS_METHODS.getFullThreadDiff, input),
+        requestWithSchema(
+          ORCHESTRATION_WS_METHODS.getFullThreadDiff,
+          OrchestrationGetFullThreadDiffResult,
+          input,
+        ),
       replayEvents: (fromSequenceExclusive) =>
-        transport.request(ORCHESTRATION_WS_METHODS.replayEvents, { fromSequenceExclusive }),
+        requestWithSchema(ORCHESTRATION_WS_METHODS.replayEvents, OrchestrationReplayEventsResult, {
+          fromSequenceExclusive,
+        }).then((events) => Array.from(events)),
       onDomainEvent: (callback) =>
         transport.subscribe(ORCHESTRATION_WS_CHANNELS.domainEvent, (message) =>
           callback(message.data),

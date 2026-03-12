@@ -1813,6 +1813,30 @@ describe("WebSocket Server", () => {
     expect(status).toHaveBeenCalledWith({ cwd: "/test" });
   });
 
+  it("returns an error when a route handler produces an invalid websocket response payload", async () => {
+    const gitManager: GitManagerShape = {
+      status: vi.fn(() => Effect.succeed({ branch: 123 } as never)),
+      resolvePullRequest: vi.fn(() => Effect.void as any),
+      preparePullRequestThread: vi.fn(() => Effect.void as any),
+      runStackedAction: vi.fn(() => Effect.void as any),
+    };
+
+    server = await createTestServer({ cwd: "/test", gitManager });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.gitStatus, {
+      cwd: "/test",
+    });
+
+    expect(response.result).toBeUndefined();
+    expect(response.error?.message).toContain("Invalid response payload for git.status");
+    expect(response.error?.message).toContain("Expected string | null, got 123");
+  });
+
   it("supports git pull request routing over websocket", async () => {
     const resolvePullRequestResult = {
       pullRequest: {

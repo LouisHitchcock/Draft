@@ -346,9 +346,13 @@ describe("wsNativeApi", () => {
     } as const;
     await api.orchestration.dispatchCommand(command);
 
-    expect(requestMock).toHaveBeenCalledWith(ORCHESTRATION_WS_METHODS.dispatchCommand, {
-      command,
-    });
+    expect(requestMock).toHaveBeenCalledWith(
+      ORCHESTRATION_WS_METHODS.dispatchCommand,
+      {
+        command,
+      },
+      expect.objectContaining({ resultSchema: expect.anything() }),
+    );
   });
 
   it("forwards workspace file writes to the websocket project method", async () => {
@@ -362,11 +366,15 @@ describe("wsNativeApi", () => {
       contents: "# Plan\n",
     });
 
-    expect(requestMock).toHaveBeenCalledWith(WS_METHODS.projectsWriteFile, {
-      cwd: "/tmp/project",
-      relativePath: "plan.md",
-      contents: "# Plan\n",
-    });
+    expect(requestMock).toHaveBeenCalledWith(
+      WS_METHODS.projectsWriteFile,
+      {
+        cwd: "/tmp/project",
+        relativePath: "plan.md",
+        contents: "# Plan\n",
+      },
+      expect.objectContaining({ resultSchema: expect.anything() }),
+    );
   });
 
   it("forwards full-thread diff requests to the orchestration websocket method", async () => {
@@ -379,10 +387,14 @@ describe("wsNativeApi", () => {
       toTurnCount: 1,
     });
 
-    expect(requestMock).toHaveBeenCalledWith(ORCHESTRATION_WS_METHODS.getFullThreadDiff, {
-      threadId: "thread-1",
-      toTurnCount: 1,
-    });
+    expect(requestMock).toHaveBeenCalledWith(
+      ORCHESTRATION_WS_METHODS.getFullThreadDiff,
+      {
+        threadId: "thread-1",
+        toTurnCount: 1,
+      },
+      expect.objectContaining({ resultSchema: expect.anything() }),
+    );
   });
 
   it("forwards context menu metadata to desktop bridge", async () => {

@@ -7,9 +7,13 @@ import {
   WsResponse as WsResponseSchema,
 } from "@t3tools/contracts";
 import { decodeUnknownJsonResult, formatSchemaError } from "@t3tools/shared/schemaJson";
-import { Result, Schema } from "effect";
+import { Exit, Result, Schema } from "effect";
 
 type PushListener<C extends WsPushChannel> = (message: WsPushMessage<C>) => void;
+
+interface RequestOptions<T> {
+  readonly resultSchema?: Schema.Schema<T>;
+}
 
 interface PendingRequest {
   envelope: WsRequestEnvelope;
@@ -17,6 +21,7 @@ interface PendingRequest {
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
   sent: boolean;
+  resultSchema?: Schema.Schema<unknown>;
 }
 
 interface SubscribeOptions {
@@ -74,7 +79,11 @@ export class WsTransport {
     this.connect();
   }
 
-  async request<T = unknown>(method: string, params?: unknown): Promise<T> {
+  async request<T = unknown>(
+    method: string,
+    params?: unknown,
+    options?: RequestOptions<T>,
+  ): Promise<T> {
     if (typeof method !== "string" || method.length === 0) {
       throw new Error("Request method is required");
     }
@@ -95,6 +104,7 @@ export class WsTransport {
         reject,
         timeout,
         sent: false,
+        ...(options?.resultSchema ? { resultSchema: options.resultSchema } : {}),
       });
 
       this.flushPendingRequests();
@@ -242,7 +252,23 @@ export class WsTransport {
       return;
     }
 
-    pending.resolve(message.result);
+    const rawResult = "result" in message ? message.result : undefined;
+    if (!pending.resultSchema) {
+      pending.resolve(rawResult);
+      return;
+    }
+
+    const decodedResult = Schema.decodeUnknownExit(pending.resultSchema as never)(rawResult);
+    if (Exit.isFailure(decodedResult)) {
+      pending.reject(
+        new Error(
+          `Invalid response payload for ${pending.envelope.body._tag}: ${formatSchemaError(decodedResult.cause)}`,
+        ),
+      );
+      return;
+    }
+
+    pending.resolve(decodedResult.value);
   }
 
   private flushPendingRequests() {

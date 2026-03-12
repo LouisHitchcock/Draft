@@ -3,26 +3,38 @@ import { NonNegativeInt, ProjectId, ThreadId, TrimmedNonEmptyString } from "./ba
 
 import {
   ClientOrchestrationCommand,
+  DispatchResult,
   OrchestrationEvent,
+  OrchestrationGetFullThreadDiffResult,
   ORCHESTRATION_WS_CHANNELS,
   OrchestrationGetFullThreadDiffInput,
+  OrchestrationGetSnapshotResult,
   ORCHESTRATION_WS_METHODS,
   OrchestrationGetSnapshotInput,
+  OrchestrationGetTurnDiffResult,
   OrchestrationGetTurnDiffInput,
+  OrchestrationReplayEventsResult,
   OrchestrationReplayEventsInput,
 } from "./orchestration";
 import {
+  GitCreateWorktreeResult,
   GitCheckoutInput,
   GitCreateBranchInput,
   GitPreparePullRequestThreadInput,
+  GitPreparePullRequestThreadResult,
   GitCreateWorktreeInput,
   GitInitInput,
   GitListBranchesInput,
+  GitListBranchesResult,
   GitPullInput,
+  GitPullResult,
   GitPullRequestRefInput,
+  GitResolvePullRequestResult,
   GitRemoveWorktreeInput,
   GitRunStackedActionInput,
+  GitRunStackedActionResult,
   GitStatusInput,
+  GitStatusResult,
 } from "./git";
 import {
   TerminalClearInput,
@@ -31,13 +43,25 @@ import {
   TerminalOpenInput,
   TerminalResizeInput,
   TerminalRestartInput,
+  TerminalSessionSnapshot,
   TerminalWriteInput,
 } from "./terminal";
 import { KeybindingRule } from "./keybindings";
-import { ProjectSearchEntriesInput, ProjectWriteFileInput } from "./project";
+import {
+  ProjectSearchEntriesInput,
+  ProjectSearchEntriesResult,
+  ProjectWriteFileInput,
+  ProjectWriteFileResult,
+} from "./project";
 import { OpenInEditorInput } from "./editor";
-import { ServerCopilotReasoningProbeInput } from "./server";
-import { ServerConfigUpdatedPayload } from "./server";
+import {
+  ServerConfig,
+  ServerConfigUpdatedPayload,
+  ServerCopilotReasoningProbe,
+  ServerCopilotReasoningProbeInput,
+  ServerCopilotUsage,
+  ServerUpsertKeybindingResult,
+} from "./server";
 
 // ── WebSocket RPC Method Names ───────────────────────────────────────
 
@@ -236,3 +260,37 @@ export type WsPushEnvelopeBase = typeof WsPushEnvelopeBase.Type;
 
 export const WsResponse = Schema.Union([WebSocketResponse, WsPush]);
 export type WsResponse = typeof WsResponse.Type;
+
+export const WsRpcResultSchemaByMethod = {
+  [ORCHESTRATION_WS_METHODS.dispatchCommand]: DispatchResult,
+  [ORCHESTRATION_WS_METHODS.getSnapshot]: OrchestrationGetSnapshotResult,
+  [ORCHESTRATION_WS_METHODS.getTurnDiff]: OrchestrationGetTurnDiffResult,
+  [ORCHESTRATION_WS_METHODS.getFullThreadDiff]: OrchestrationGetFullThreadDiffResult,
+  [ORCHESTRATION_WS_METHODS.replayEvents]: OrchestrationReplayEventsResult,
+  [WS_METHODS.projectsSearchEntries]: ProjectSearchEntriesResult,
+  [WS_METHODS.projectsWriteFile]: ProjectWriteFileResult,
+  [WS_METHODS.shellOpenInEditor]: Schema.Void,
+  [WS_METHODS.gitPull]: GitPullResult,
+  [WS_METHODS.gitStatus]: GitStatusResult,
+  [WS_METHODS.gitRunStackedAction]: GitRunStackedActionResult,
+  [WS_METHODS.gitListBranches]: GitListBranchesResult,
+  [WS_METHODS.gitCreateWorktree]: GitCreateWorktreeResult,
+  [WS_METHODS.gitRemoveWorktree]: Schema.Void,
+  [WS_METHODS.gitCreateBranch]: Schema.Void,
+  [WS_METHODS.gitCheckout]: Schema.Void,
+  [WS_METHODS.gitInit]: Schema.Void,
+  [WS_METHODS.gitResolvePullRequest]: GitResolvePullRequestResult,
+  [WS_METHODS.gitPreparePullRequestThread]: GitPreparePullRequestThreadResult,
+  [WS_METHODS.terminalOpen]: TerminalSessionSnapshot,
+  [WS_METHODS.terminalWrite]: Schema.Void,
+  [WS_METHODS.terminalResize]: Schema.Void,
+  [WS_METHODS.terminalClear]: Schema.Void,
+  [WS_METHODS.terminalRestart]: TerminalSessionSnapshot,
+  [WS_METHODS.terminalClose]: Schema.Void,
+  [WS_METHODS.serverGetConfig]: ServerConfig,
+  [WS_METHODS.serverGetCopilotUsage]: ServerCopilotUsage,
+  [WS_METHODS.serverProbeCopilotReasoning]: ServerCopilotReasoningProbe,
+  [WS_METHODS.serverUpsertKeybinding]: ServerUpsertKeybindingResult,
+} as const;
+
+export type WsRpcMethod = keyof typeof WsRpcResultSchemaByMethod;

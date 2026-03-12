@@ -1,4 +1,5 @@
 import { WS_CHANNELS } from "@t3tools/contracts";
+import { Schema } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WsTransport } from "./wsTransport";
@@ -153,6 +154,34 @@ describe("WsTransport", () => {
     );
 
     await expect(requestPromise).resolves.toEqual({ projects: [] });
+
+    transport.dispose();
+  });
+
+  it("rejects responses that do not match the expected result schema", async () => {
+    const transport = new WsTransport("ws://localhost:3020");
+    const socket = getSocket();
+    socket.open();
+
+    const requestPromise = transport.request("server.getConfig", undefined, {
+      resultSchema: Schema.Struct({ cwd: Schema.String }),
+    });
+    const sent = socket.sent.at(-1);
+    if (!sent) {
+      throw new Error("Expected request envelope to be sent");
+    }
+
+    const requestEnvelope = JSON.parse(sent) as { id: string };
+    socket.serverMessage(
+      JSON.stringify({
+        id: requestEnvelope.id,
+        result: { cwd: 123 },
+      }),
+    );
+
+    await expect(requestPromise).rejects.toThrow(
+      "Invalid response payload for server.getConfig: Expected string, got 123",
+    );
 
     transport.dispose();
   });
