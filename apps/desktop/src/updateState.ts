@@ -1,7 +1,7 @@
 import type { DesktopUpdateState } from "@t3tools/contracts";
+import { getVersionPrereleaseTag } from "@t3tools/shared/appRelease";
 
 const DEFAULT_DESKTOP_UPDATE_CHANNEL = "latest";
-const VERSION_PRERELEASE_PATTERN = /^\d+\.\d+\.\d+-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)$/;
 
 export function shouldBroadcastDownloadProgress(
   currentState: DesktopUpdateState,
@@ -51,17 +51,7 @@ export function getAutoUpdateDisabledReason(args: {
 }
 
 export function getVersionPrereleaseChannel(version: string): string | null {
-  const match = VERSION_PRERELEASE_PATTERN.exec(version);
-  if (!match) {
-    return null;
-  }
-
-  const prereleaseTag = match[1]?.split(".")[0] ?? "";
-  if (prereleaseTag.length === 0 || !/[A-Za-z]/.test(prereleaseTag)) {
-    return null;
-  }
-
-  return prereleaseTag;
+  return getVersionPrereleaseTag(version);
 }
 
 export function resolveAutoUpdaterTrack(version: string): {

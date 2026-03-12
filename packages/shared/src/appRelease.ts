@@ -1,0 +1,41 @@
+const VERSION_PRERELEASE_PATTERN = /^\d+\.\d+\.\d+-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)$/;
+
+export interface AppReleaseBrandingInput {
+  readonly version: string;
+  readonly isDevelopment: boolean;
+}
+
+export interface AppReleaseBranding {
+  readonly stageLabel: "Dev" | "Alpha";
+  readonly displayName: string;
+  readonly userDataDirName: string;
+}
+
+export function getVersionPrereleaseTag(version: string): string | null {
+  const match = VERSION_PRERELEASE_PATTERN.exec(version);
+  if (!match) {
+    return null;
+  }
+
+  const prereleaseTag = match[1]?.split(".")[0] ?? "";
+  if (prereleaseTag.length === 0 || !/[A-Za-z]/.test(prereleaseTag)) {
+    return null;
+  }
+
+  return prereleaseTag;
+}
+
+export function isForkPrereleaseVersion(version: string): boolean {
+  return getVersionPrereleaseTag(version) === "fork";
+}
+
+export function resolveAppReleaseBranding(input: AppReleaseBrandingInput): AppReleaseBranding {
+  const stageLabel =
+    input.isDevelopment || isForkPrereleaseVersion(input.version) ? "Dev" : "Alpha";
+
+  return {
+    stageLabel,
+    displayName: `T3 Code (${stageLabel})`,
+    userDataDirName: stageLabel === "Dev" ? "t3code-dev" : "t3code",
+  };
+}

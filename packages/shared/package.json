@@ -28,6 +28,10 @@
       "types": "./src/desktopBackend.ts",
       "import": "./src/desktopBackend.ts"
     },
+    "./appRelease": {
+      "types": "./src/appRelease.ts",
+      "import": "./src/appRelease.ts"
+    },
     "./DrainableWorker": {
       "types": "./src/DrainableWorker.ts",
       "import": "./src/DrainableWorker.ts"

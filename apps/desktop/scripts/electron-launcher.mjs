@@ -18,8 +18,9 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { resolveAppReleaseBranding } from "@t3tools/shared/appRelease";
+
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
-const APP_DISPLAY_NAME = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
 const APP_BUNDLE_ID = "com.t3tools.t3code";
 const LAUNCHER_VERSION = 1;
 
@@ -48,6 +49,11 @@ function writeTextFileIfChanged(filePath, contents, mode) {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const desktopDir = resolve(__dirname, "..");
+const desktopPackageJson = readJson(join(desktopDir, "package.json")) ?? {};
+const APP_DISPLAY_NAME = resolveAppReleaseBranding({
+  version: desktopPackageJson.version ?? "0.0.0",
+  isDevelopment,
+}).displayName;
 
 function setPlistString(plistPath, key, value) {
   const replaceResult = spawnSync("plutil", ["-replace", key, "-string", value, plistPath], {
