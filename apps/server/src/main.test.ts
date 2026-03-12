@@ -206,6 +206,22 @@ it.layer(testLayer)("server CLI command", (it) => {
     }),
   );
 
+  it.effect("accepts an ephemeral desktop port from the environment", () =>
+    Effect.gen(function* () {
+      yield* runCli([], {
+        T3CODE_MODE: "desktop",
+        T3CODE_PORT: "0",
+        T3CODE_NO_BROWSER: "true",
+      });
+
+      assert.equal(findAvailablePort.mock.calls.length, 0);
+      assert.equal(start.mock.calls.length, 1);
+      assert.equal(resolvedConfig?.port, 0);
+      assert.equal(resolvedConfig?.host, "127.0.0.1");
+      assert.equal(resolvedConfig?.mode, "desktop");
+    }),
+  );
+
   it.effect("allows overriding desktop host with --host", () =>
     Effect.gen(function* () {
       yield* runCli(["--host", "0.0.0.0"], {

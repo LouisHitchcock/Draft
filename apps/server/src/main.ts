@@ -98,7 +98,10 @@ const CliEnvConfig = Config.all({
       }),
     ),
   ),
-  port: Config.port("T3CODE_PORT").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  port: Config.number("T3CODE_PORT").pipe(
+    Config.option,
+    Config.map(Option.match({ onNone: () => undefined, onSome: (value) => value })),
+  ),
   host: Config.string("T3CODE_HOST").pipe(Config.option, Config.map(Option.getOrUndefined)),
   stateDir: Config.string("T3CODE_STATE_DIR").pipe(
     Config.option,
@@ -144,7 +147,7 @@ const ServerConfigLive = (input: CliInput) =>
       const port = yield* Option.match(input.port, {
         onSome: (value) => Effect.succeed(value),
         onNone: () => {
-          if (env.port) {
+          if (env.port !== undefined) {
             return Effect.succeed(env.port);
           }
           if (mode === "desktop") {
