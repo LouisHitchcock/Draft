@@ -29,7 +29,8 @@
     "effect": "catalog:",
     "node-pty": "npm:@homebridge/node-pty-prebuilt-multiarch@0.13.1",
     "open": "^10.1.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
