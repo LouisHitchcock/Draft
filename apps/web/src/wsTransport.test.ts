@@ -15,10 +15,12 @@ class MockWebSocket {
   static readonly CLOSED = 3;
 
   readyState = MockWebSocket.CONNECTING;
+  readonly url: string;
   readonly sent: string[] = [];
   private readonly listeners = new Map<WsEventType, Set<WsListener>>();
 
-  constructor(_url: string) {
+  constructor(url: string) {
+    this.url = url;
     sockets.push(this);
   }
 
@@ -81,6 +83,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.WebSocket = originalWebSocket;
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -246,6 +249,32 @@ describe("WsTransport", () => {
     transport.dispose();
   });
 
+  it("clears cached push payloads after the socket closes", () => {
+    const transport = new WsTransport("ws://localhost:3020");
+    const socket = getSocket();
+    socket.open();
+
+    socket.serverMessage(
+      JSON.stringify({
+        type: "push",
+        sequence: 1,
+        channel: WS_CHANNELS.serverConfigUpdated,
+        data: { issues: [], providers: [] },
+      }),
+    );
+
+    expect(transport.getLatestPush(WS_CHANNELS.serverConfigUpdated)?.data).toEqual({
+      issues: [],
+      providers: [],
+    });
+
+    socket.close();
+
+    expect(transport.getLatestPush(WS_CHANNELS.serverConfigUpdated)).toBeNull();
+
+    transport.dispose();
+  });
+
   it("queues requests until the websocket opens", async () => {
     const transport = new WsTransport("ws://localhost:3020");
     const socket = getSocket();
@@ -264,6 +293,50 @@ describe("WsTransport", () => {
     );
 
     await expect(requestPromise).resolves.toEqual({ projects: [] });
+    transport.dispose();
+  });
+
+  it("re-resolves the desktop bridge websocket url on reconnect", async () => {
+    vi.useFakeTimers();
+
+    const desktopBridge = {
+      getWsUrl: vi
+        .fn<() => string | null>()
+        .mockReturnValueOnce("ws://127.0.0.1:4001")
+        .mockReturnValueOnce("ws://127.0.0.1:4002"),
+    };
+    Object.defineProperty(window, "desktopBridge", {
+      configurable: true,
+      value: desktopBridge,
+    });
+
+    const transport = new WsTransport();
+    const firstSocket = getSocket();
+    expect(firstSocket.url).toBe("ws://127.0.0.1:4001");
+    firstSocket.open();
+    firstSocket.close();
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    const secondSocket = getSocket();
+    expect(secondSocket).not.toBe(firstSocket);
+    expect(secondSocket.url).toBe("ws://127.0.0.1:4002");
+
+    transport.dispose();
+    vi.useRealTimers();
+  });
+
+  it("omits the port delimiter when the page uses a default port", () => {
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { protocol: "https:", hostname: "example.com", port: "" },
+    });
+
+    const transport = new WsTransport();
+    const socket = getSocket();
+
+    expect(socket.url).toBe("wss://example.com");
+
     transport.dispose();
   });
 });

@@ -7,11 +7,16 @@ const SET_THEME_CHANNEL = "desktop:set-theme";
 const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
+const BACKEND_WS_URL_UPDATED_CHANNEL = "desktop:backend-ws-url-updated";
 const UPDATE_STATE_CHANNEL = "desktop:update-state";
 const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
 const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
 const UPDATE_INSTALL_CHANNEL = "desktop:update-install";
-const wsUrl = process.env.T3CODE_DESKTOP_WS_URL ?? null;
+let wsUrl = process.env.T3CODE_DESKTOP_WS_URL ?? null;
+
+ipcRenderer.on(BACKEND_WS_URL_UPDATED_CHANNEL, (_event, nextUrl: unknown) => {
+  wsUrl = typeof nextUrl === "string" && nextUrl.length > 0 ? nextUrl : null;
+});
 
 contextBridge.exposeInMainWorld("desktopBridge", {
   getWsUrl: () => wsUrl,

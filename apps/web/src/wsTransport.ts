@@ -33,6 +33,21 @@ const isWebSocketResponseEnvelope = Schema.is(WebSocketResponse);
 const isWsPushMessage = (value: WsResponseMessage): value is WsPush =>
   "type" in value && value.type === "push";
 
+const resolveDefaultWsUrl = (): string => {
+  const bridgeUrl = window.desktopBridge?.getWsUrl();
+  if (bridgeUrl && bridgeUrl.length > 0) {
+    return bridgeUrl;
+  }
+
+  const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
+  if (envUrl && envUrl.length > 0) {
+    return envUrl;
+  }
+
+  const port = window.location.port ? `:${window.location.port}` : "";
+  return `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}${port}`;
+};
+
 interface WsRequestEnvelope {
   id: string;
   body: {
@@ -52,18 +67,10 @@ export class WsTransport {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
   private state: TransportState = "connecting";
-  private readonly url: string;
+  private readonly explicitUrl: string | undefined;
 
   constructor(url?: string) {
-    const bridgeUrl = window.desktopBridge?.getWsUrl();
-    const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
-    this.url =
-      url ??
-      (bridgeUrl && bridgeUrl.length > 0
-        ? bridgeUrl
-        : envUrl && envUrl.length > 0
-          ? envUrl
-          : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:${window.location.port}`);
+    this.explicitUrl = url;
     this.connect();
   }
 
@@ -163,7 +170,7 @@ export class WsTransport {
     }
 
     this.setState(this.reconnectAttempt > 0 ? "reconnecting" : "connecting");
-    const ws = new WebSocket(this.url);
+    const ws = new WebSocket(this.explicitUrl ?? resolveDefaultWsUrl());
 
     ws.addEventListener("open", () => {
       this.ws = ws;
@@ -184,6 +191,7 @@ export class WsTransport {
         this.setState("disposed");
         return;
       }
+      this.latestPushByChannel.clear();
       this.setState("closed");
       this.rejectSentPendingRequests();
       this.scheduleReconnect();

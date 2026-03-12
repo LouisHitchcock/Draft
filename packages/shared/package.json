@@ -24,6 +24,10 @@
       "types": "./src/Net.ts",
       "import": "./src/Net.ts"
     },
+    "./desktopBackend": {
+      "types": "./src/desktopBackend.ts",
+      "import": "./src/desktopBackend.ts"
+    },
     "./DrainableWorker": {
       "types": "./src/DrainableWorker.ts",
       "import": "./src/DrainableWorker.ts"

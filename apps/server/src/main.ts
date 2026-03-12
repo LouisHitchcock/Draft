@@ -8,6 +8,7 @@
  */
 import { Config, Data, Effect, FileSystem, Layer, Option, Path, Schema, ServiceMap } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
+import { formatDesktopBackendReadyLine } from "@t3tools/shared/desktopBackend";
 import { NetService } from "@t3tools/shared/Net";
 import {
   DEFAULT_PORT,
@@ -209,6 +210,20 @@ const DEFAULT_LOOPBACK_HOST = "127.0.0.1";
 const formatHostForUrl = (host: string): string =>
   host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
 
+const resolveListeningPort = (
+  server: { readonly address?: () => string | { port?: unknown } | null },
+  fallbackPort: number,
+): number => {
+  if (typeof server.address !== "function") {
+    return fallbackPort;
+  }
+  const address = server.address();
+  if (typeof address === "object" && address !== null && typeof address.port === "number") {
+    return address.port;
+  }
+  return fallbackPort;
+};
+
 export const recordStartupHeartbeat = Effect.gen(function* () {
   const analytics = yield* AnalyticsService;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
@@ -252,13 +267,19 @@ const makeServerProgram = (input: CliInput) =>
       );
     }
 
-    yield* start;
+    const server = yield* start;
     yield* Effect.forkChild(recordStartupHeartbeat);
 
-    const localUrl = `http://localhost:${config.port}`;
+    const listeningPort = resolveListeningPort(server, config.port);
+
+    if (config.mode === "desktop") {
+      console.log(formatDesktopBackendReadyLine({ port: listeningPort }));
+    }
+
+    const localUrl = `http://localhost:${listeningPort}`;
     const bindUrl =
       config.host && !isWildcardHost(config.host)
-        ? `http://${formatHostForUrl(config.host)}:${config.port}`
+        ? `http://${formatHostForUrl(config.host)}:${listeningPort}`
         : localUrl;
     const { authToken, devUrl, ...safeConfig } = config;
     yield* Effect.logInfo("T3 Code running", {

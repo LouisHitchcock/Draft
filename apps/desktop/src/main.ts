@@ -16,7 +16,6 @@ import {
   shell,
 } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
-import * as Effect from "effect/Effect";
 import type {
   DesktopTheme,
   DesktopUpdateActionResult,
@@ -25,7 +24,10 @@ import type {
 import { autoUpdater } from "electron-updater";
 
 import type { ContextMenuItem } from "@t3tools/contracts";
-import { NetService } from "@t3tools/shared/Net";
+import {
+  createDesktopBackendWsUrl,
+  parseDesktopBackendReadyLine,
+} from "@t3tools/shared/desktopBackend";
 import { RotatingFileSink } from "@t3tools/shared/logging";
 import { showDesktopConfirmDialog } from "./confirmDialog";
 import { fixPath } from "./fixPath";
@@ -52,6 +54,7 @@ const SET_THEME_CHANNEL = "desktop:set-theme";
 const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
+const BACKEND_WS_URL_UPDATED_CHANNEL = "desktop:backend-ws-url-updated";
 const UPDATE_STATE_CHANNEL = "desktop:update-state";
 const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
 const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
@@ -75,6 +78,7 @@ const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
 const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const DESKTOP_UPDATE_CHANNEL = "latest";
 const DESKTOP_UPDATE_ALLOW_PRERELEASE = false;
+const BACKEND_READY_TIMEOUT_MS = 15_000;
 
 type DesktopUpdateErrorContext = DesktopUpdateState["errorContext"];
 
@@ -83,6 +87,7 @@ let backendProcess: ChildProcess.ChildProcess | null = null;
 let backendPort = 0;
 let backendAuthToken = "";
 let backendWsUrl = "";
+let backendStartupPromise: Promise<void> | null = null;
 let restartAttempt = 0;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
 let isQuitting = false;
@@ -237,15 +242,48 @@ function initializePackagedLogging(): void {
   }
 }
 
-function captureBackendOutput(child: ChildProcess.ChildProcess): void {
-  if (!app.isPackaged || backendLogSink === null) return;
-  const writeChunk = (chunk: unknown): void => {
-    if (!backendLogSink) return;
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), "utf8");
+function writeBackendStreamChunk(
+  streamName: "stdout" | "stderr",
+  chunk: unknown,
+  encoding: BufferEncoding | undefined,
+): Buffer {
+  const buffer = Buffer.isBuffer(chunk)
+    ? chunk
+    : Buffer.from(String(chunk), typeof chunk === "string" ? encoding : undefined);
+  if (backendLogSink) {
     backendLogSink.write(buffer);
+  }
+  if (!app.isPackaged) {
+    if (streamName === "stdout") {
+      process.stdout.write(buffer);
+    } else {
+      process.stderr.write(buffer);
+    }
+  }
+  return buffer;
+}
+
+function attachBackendOutput(
+  child: ChildProcess.ChildProcess,
+  options?: { readonly onStdoutLine?: (line: string) => void },
+): void {
+  let stdoutBuffer = "";
+  const handleStdoutChunk = (chunk: unknown) => {
+    const buffer = writeBackendStreamChunk("stdout", chunk, undefined);
+    if (!options?.onStdoutLine) {
+      return;
+    }
+    stdoutBuffer += buffer.toString("utf8");
+    const lines = stdoutBuffer.split(/\r?\n/);
+    stdoutBuffer = lines.pop() ?? "";
+    for (const line of lines) {
+      options.onStdoutLine(line);
+    }
   };
-  child.stdout?.on("data", writeChunk);
-  child.stderr?.on("data", writeChunk);
+  child.stdout?.on("data", handleStdoutChunk);
+  child.stderr?.on("data", (chunk) => {
+    writeBackendStreamChunk("stderr", chunk, undefined);
+  });
 }
 
 initializePackagedLogging();
@@ -278,6 +316,7 @@ let updateCheckInFlight = false;
 let updateDownloadInFlight = false;
 let updaterConfigured = false;
 let updateState: DesktopUpdateState = initialUpdateState();
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 function resolveUpdaterErrorContext(): DesktopUpdateErrorContext {
   if (updateDownloadInFlight) return "download";
@@ -452,6 +491,42 @@ function handleFatalStartupError(stage: string, error: unknown): void {
   app.quit();
 }
 
+function broadcastBackendWsUrl(): void {
+  if (!backendWsUrl) return;
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed()) continue;
+    window.webContents.send(BACKEND_WS_URL_UPDATED_CHANNEL, backendWsUrl);
+  }
+}
+
+function updateBackendWsUrl(port: number): void {
+  backendPort = port;
+  backendWsUrl = createDesktopBackendWsUrl({
+    port,
+    authToken: backendAuthToken,
+  });
+  process.env.T3CODE_DESKTOP_WS_URL = backendWsUrl;
+  writeDesktopLogHeader(`backend websocket url updated port=${port}`);
+  broadcastBackendWsUrl();
+}
+
+function focusOrRestoreMainWindow(): void {
+  const targetWindow =
+    mainWindow ??
+    BrowserWindow.getAllWindows()[0] ??
+    (app.isReady() && backendWsUrl ? createWindow() : null);
+  if (!targetWindow) {
+    return;
+  }
+  if (targetWindow.isMinimized()) {
+    targetWindow.restore();
+  }
+  if (!targetWindow.isVisible()) {
+    targetWindow.show();
+  }
+  targetWindow.focus();
+}
+
 function registerDesktopProtocol(): void {
   if (isDevelopment || desktopProtocolRegistered) return;
 
@@ -495,7 +570,10 @@ function registerDesktopProtocol(): void {
 function dispatchMenuAction(action: string): void {
   const existingWindow =
     BrowserWindow.getFocusedWindow() ?? mainWindow ?? BrowserWindow.getAllWindows()[0];
-  const targetWindow = existingWindow ?? createWindow();
+  const targetWindow = existingWindow ?? (backendWsUrl ? createWindow() : null);
+  if (!targetWindow) {
+    return;
+  }
   if (!existingWindow) {
     mainWindow = targetWindow;
   }
@@ -939,7 +1017,7 @@ function backendEnv(): NodeJS.ProcessEnv {
     ...process.env,
     T3CODE_MODE: "desktop",
     T3CODE_NO_BROWSER: "1",
-    T3CODE_PORT: String(backendPort),
+    T3CODE_PORT: "0",
     T3CODE_STATE_DIR: STATE_DIR,
     T3CODE_AUTH_TOKEN: backendAuthToken,
   };
@@ -954,66 +1032,138 @@ function scheduleBackendRestart(reason: string): void {
 
   restartTimer = setTimeout(() => {
     restartTimer = null;
-    startBackend();
+    void startBackend().catch((error) => {
+      const message = formatErrorMessage(error);
+      console.error(`[desktop] backend restart failed (${message})`);
+      scheduleBackendRestart(message);
+    });
   }, delayMs);
+  restartTimer.unref();
 }
 
-function startBackend(): void {
-  if (isQuitting || backendProcess) return;
-
-  const backendEntry = resolveBackendEntry();
-  if (!FS.existsSync(backendEntry)) {
-    scheduleBackendRestart(`missing server entry at ${backendEntry}`);
+async function startBackend(): Promise<void> {
+  if (isQuitting) return;
+  if (backendStartupPromise) {
+    return backendStartupPromise;
+  }
+  if (backendProcess) {
     return;
   }
 
-  const captureBackendLogs = app.isPackaged && backendLogSink !== null;
-  const child = ChildProcess.spawn(process.execPath, [backendEntry], {
-    cwd: resolveBackendCwd(),
-    // In Electron main, process.execPath points to the Electron binary.
-    // Run the child in Node mode so this backend process does not become a GUI app instance.
-    env: {
-      ...backendEnv(),
-      ELECTRON_RUN_AS_NODE: "1",
-    },
-    stdio: captureBackendLogs ? ["ignore", "pipe", "pipe"] : "inherit",
-  });
-  backendProcess = child;
-  let backendSessionClosed = false;
-  const closeBackendSession = (details: string) => {
-    if (backendSessionClosed) return;
-    backendSessionClosed = true;
-    writeBackendSessionBoundary("END", details);
-  };
-  writeBackendSessionBoundary(
-    "START",
-    `pid=${child.pid ?? "unknown"} port=${backendPort} cwd=${resolveBackendCwd()}`,
-  );
-  captureBackendOutput(child);
-
-  child.once("spawn", () => {
-    restartAttempt = 0;
-  });
-
-  child.on("error", (error) => {
-    if (backendProcess === child) {
-      backendProcess = null;
+  backendStartupPromise = (async () => {
+    const backendEntry = resolveBackendEntry();
+    if (!FS.existsSync(backendEntry)) {
+      throw new Error(`Missing server entry at ${backendEntry}`);
     }
-    closeBackendSession(`pid=${child.pid ?? "unknown"} error=${error.message}`);
-    scheduleBackendRestart(error.message);
-  });
 
-  child.on("exit", (code, signal) => {
-    if (backendProcess === child) {
-      backendProcess = null;
-    }
-    closeBackendSession(
-      `pid=${child.pid ?? "unknown"} code=${code ?? "null"} signal=${signal ?? "null"}`,
+    const child = ChildProcess.spawn(process.execPath, [backendEntry], {
+      cwd: resolveBackendCwd(),
+      // In Electron main, process.execPath points to the Electron binary.
+      // Run the child in Node mode so this backend process does not become a GUI app instance.
+      env: {
+        ...backendEnv(),
+        ELECTRON_RUN_AS_NODE: "1",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    backendProcess = child;
+
+    let backendSessionClosed = false;
+    const closeBackendSession = (details: string) => {
+      if (backendSessionClosed) return;
+      backendSessionClosed = true;
+      writeBackendSessionBoundary("END", details);
+    };
+
+    writeBackendSessionBoundary(
+      "START",
+      `pid=${child.pid ?? "unknown"} port=auto cwd=${resolveBackendCwd()}`,
     );
-    if (isQuitting) return;
-    const reason = `code=${code ?? "null"} signal=${signal ?? "null"}`;
-    scheduleBackendRestart(reason);
+
+    const readyPort = await new Promise<number>((resolve, reject) => {
+      let settled = false;
+      let ready = false;
+      const settleResolve = (port: number) => {
+        if (settled) return;
+        settled = true;
+        if (readyTimer) {
+          clearTimeout(readyTimer);
+        }
+        ready = true;
+        resolve(port);
+      };
+      const settleReject = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        if (readyTimer) {
+          clearTimeout(readyTimer);
+        }
+        reject(error);
+      };
+
+      const readyTimer = setTimeout(() => {
+        const error = new Error(
+          `Backend did not become ready within ${BACKEND_READY_TIMEOUT_MS}ms.`,
+        );
+        closeBackendSession(`pid=${child.pid ?? "unknown"} error=${error.message}`);
+        if (backendProcess === child) {
+          backendProcess = null;
+        }
+        if (child.exitCode === null && child.signalCode === null) {
+          child.kill("SIGTERM");
+        }
+        settleReject(error);
+      }, BACKEND_READY_TIMEOUT_MS);
+      readyTimer.unref();
+
+      attachBackendOutput(child, {
+        onStdoutLine: (line) => {
+          const payload = parseDesktopBackendReadyLine(line);
+          if (!payload) {
+            return;
+          }
+          settleResolve(payload.port);
+        },
+      });
+
+      child.once("spawn", () => {
+        writeDesktopLogHeader(`backend spawned pid=${child.pid ?? "unknown"}`);
+      });
+
+      child.on("error", (error) => {
+        if (backendProcess === child) {
+          backendProcess = null;
+        }
+        closeBackendSession(`pid=${child.pid ?? "unknown"} error=${error.message}`);
+        if (!ready) {
+          settleReject(error instanceof Error ? error : new Error(String(error)));
+          return;
+        }
+        scheduleBackendRestart(error.message);
+      });
+
+      child.on("exit", (code, signal) => {
+        if (backendProcess === child) {
+          backendProcess = null;
+        }
+        const reason = `code=${code ?? "null"} signal=${signal ?? "null"}`;
+        closeBackendSession(`pid=${child.pid ?? "unknown"} ${reason}`);
+        if (!ready) {
+          settleReject(new Error(`Backend exited before ready (${reason}).`));
+          return;
+        }
+        if (isQuitting) return;
+        scheduleBackendRestart(reason);
+      });
+    });
+
+    restartAttempt = 0;
+    updateBackendWsUrl(readyPort);
+  })().finally(() => {
+    backendStartupPromise = null;
   });
+
+  return backendStartupPromise;
 }
 
 function stopBackend(): void {
@@ -1306,6 +1456,9 @@ function createWindow(): BrowserWindow {
   });
   window.webContents.on("did-finish-load", () => {
     window.setTitle(APP_DISPLAY_NAME);
+    if (backendWsUrl) {
+      window.webContents.send(BACKEND_WS_URL_UPDATED_CHANNEL, backendWsUrl);
+    }
     emitUpdateState();
   });
   window.once("ready-to-show", () => {
@@ -1338,23 +1491,13 @@ configureAppIdentity();
 
 async function bootstrap(): Promise<void> {
   writeDesktopLogHeader("bootstrap start");
-  backendPort = await Effect.service(NetService).pipe(
-    Effect.flatMap((net) => net.reserveLoopbackPort()),
-    Effect.provide(NetService.layer),
-    Effect.runPromise,
-  );
-  writeDesktopLogHeader(`reserved backend port via NetService port=${backendPort}`);
   backendAuthToken = Crypto.randomBytes(24).toString("hex");
-  backendWsUrl = `ws://127.0.0.1:${backendPort}/?token=${encodeURIComponent(backendAuthToken)}`;
-  process.env.T3CODE_DESKTOP_WS_URL = backendWsUrl;
-  writeDesktopLogHeader(
-    `bootstrap resolved websocket url=ws://127.0.0.1:${backendPort}/?token=[redacted]`,
-  );
+  writeDesktopLogHeader("bootstrap generated backend auth token");
 
   registerIpcHandlers();
   writeDesktopLogHeader("bootstrap ipc handlers registered");
-  startBackend();
-  writeDesktopLogHeader("bootstrap backend start requested");
+  await startBackend();
+  writeDesktopLogHeader(`bootstrap backend ready port=${backendPort}`);
   mainWindow = createWindow();
   writeDesktopLogHeader("bootstrap main window created");
 }
@@ -1367,27 +1510,47 @@ app.on("before-quit", () => {
   restoreStdIoCapture?.();
 });
 
-app
-  .whenReady()
-  .then(() => {
-    writeDesktopLogHeader("app ready");
-    configureAppIdentity();
-    configureApplicationMenu();
-    registerDesktopProtocol();
-    configureAutoUpdater();
-    void bootstrap().catch((error) => {
-      handleFatalStartupError("bootstrap", error);
-    });
-
-    app.on("activate", () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = createWindow();
-      }
-    });
-  })
-  .catch((error) => {
-    handleFatalStartupError("whenReady", error);
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    focusOrRestoreMainWindow();
   });
+
+  app
+    .whenReady()
+    .then(() => {
+      writeDesktopLogHeader("app ready");
+      configureAppIdentity();
+      configureApplicationMenu();
+      registerDesktopProtocol();
+      configureAutoUpdater();
+      void bootstrap().catch((error) => {
+        handleFatalStartupError("bootstrap", error);
+      });
+
+      app.on("activate", () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          void startBackend()
+            .then(() => {
+              if (BrowserWindow.getAllWindows().length === 0) {
+                mainWindow = createWindow();
+              } else {
+                focusOrRestoreMainWindow();
+              }
+            })
+            .catch((error) => {
+              handleFatalStartupError("activate", error);
+            });
+        } else {
+          focusOrRestoreMainWindow();
+        }
+      });
+    })
+    .catch((error) => {
+      handleFatalStartupError("whenReady", error);
+    });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
