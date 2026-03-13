@@ -41,7 +41,7 @@ export function isPrereleaseVersion(version: string): boolean {
   return getVersionPrereleaseTag(version) !== null;
 }
 
-export function resolveAppReleaseBranding(input: AppReleaseBrandingInput): AppReleaseBranding {
+export function resolveAppReleaseBranding(_input: AppReleaseBrandingInput): AppReleaseBranding {
   return {
     stageLabel: DEFAULT_STAGE_LABEL,
     displayName: DEFAULT_DESKTOP_PRODUCT_NAME,

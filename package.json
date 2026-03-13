@@ -53,8 +53,8 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "oxfmt": "^0.35.0",
-    "oxlint": "^1.53.0",
-    "turbo": "^2.8.16",
+    "oxlint": "^1.55.0",
+    "turbo": "^2.8.17",
     "vitest": "catalog:"
   },
   "overrides": {
