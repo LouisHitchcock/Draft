@@ -4,6 +4,8 @@
 
 - All of `bun run fmt`, `bun run lint`, and `bun run typecheck` must pass before considering tasks completed.
 - Always use `bun run test` (runs Vitest), not bare `bun test`.
+- If a change affects user-visible behavior, settings, build steps, release steps, or developer workflows, update the relevant documentation in the same change.
+- Treat stale docs as a bug. Check `README.md`, `.docs/*`, `docs/*`, and any task-specific guides touched by the feature.
 
 ## Project Snapshot
 
@@ -69,6 +71,7 @@ Before finalizing:
 - Check grounding against the codebase and tool outputs.
 - Check formatting and repo conventions.
 - Check whether tests/typecheck/lint relevant to the change should run.
+- Check whether any docs are now stale and update them before finishing.
   </verification_loop>
 
 <missing_context_gating>
