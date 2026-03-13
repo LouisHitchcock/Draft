@@ -102,6 +102,7 @@ export interface DesktopUpdateActionResult {
 
 export interface DesktopBridge {
   getWsUrl: () => string | null;
+  onBackendWsUrlUpdated: (listener: (url: string | null) => void) => () => void;
   getSecret: (key: DesktopSecretKey) => Promise<string | null>;
   setSecret: (key: DesktopSecretKey, value: string | null) => Promise<void>;
   pickFolder: () => Promise<string | null>;

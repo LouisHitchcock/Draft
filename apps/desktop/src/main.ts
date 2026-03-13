@@ -70,8 +70,6 @@ const UPDATE_STATE_CHANNEL = "desktop:update-state";
 const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
 const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
 const UPDATE_INSTALL_CHANNEL = "desktop:update-install";
-const STATE_DIR =
-  process.env.T3CODE_STATE_DIR?.trim() || Path.join(OS.homedir(), ".t3", "userdata");
 const DESKTOP_SCHEME = "t3";
 const ROOT_DIR = Path.resolve(__dirname, "../../..");
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
@@ -79,10 +77,16 @@ const appReleaseBranding = resolveAppReleaseBranding({
   version: app.getVersion(),
   isDevelopment,
 });
+const STATE_DIR =
+  process.env.T3CODE_STATE_DIR?.trim() ||
+  Path.join(OS.homedir(), ".t3", appReleaseBranding.stateDirName);
 const APP_DISPLAY_NAME = appReleaseBranding.displayName;
-const APP_USER_MODEL_ID = "com.t3tools.t3code";
+const APP_USER_MODEL_ID = appReleaseBranding.appId;
 const USER_DATA_DIR_NAME = appReleaseBranding.userDataDirName;
-const LEGACY_USER_DATA_DIR_NAMES = getLegacyUserDataDirNames(APP_DISPLAY_NAME);
+const LEGACY_USER_DATA_DIR_NAMES = getLegacyUserDataDirNames({
+  appDisplayName: APP_DISPLAY_NAME,
+  stageLabel: appReleaseBranding.stageLabel,
+});
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
 const COMMIT_HASH_DISPLAY_LENGTH = 12;
 const LOG_DIR = Path.join(STATE_DIR, "logs");
@@ -1570,6 +1574,7 @@ function createWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      additionalArguments: backendWsUrl ? [`--t3code-desktop-ws-url=${backendWsUrl}`] : [],
     },
   });
 
@@ -1608,6 +1613,12 @@ function createWindow(): BrowserWindow {
       void shell.openExternal(externalUrl);
     }
     return { action: "deny" };
+  });
+
+  window.webContents.on("console-message", (_event, level, message) => {
+    if (level >= 2 || /websocket|mixed content|content security/i.test(message)) {
+      console.warn(`[renderer-console] level=${level} ${message}`);
+    }
   });
 
   window.on("page-title-updated", (event) => {

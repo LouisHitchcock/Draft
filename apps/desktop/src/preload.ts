@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { DesktopBridge } from "@t3tools/contracts";
+import { resolveInitialDesktopWsUrl } from "./preloadWsUrl";
 
 const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
 const CONFIRM_CHANNEL = "desktop:confirm";
@@ -15,6 +16,7 @@ const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
 const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
 const UPDATE_INSTALL_CHANNEL = "desktop:update-install";
 let wsUrl = process.env.T3CODE_DESKTOP_WS_URL ?? null;
+wsUrl = resolveInitialDesktopWsUrl({ envValue: wsUrl, argv: process.argv });
 
 ipcRenderer.on(BACKEND_WS_URL_UPDATED_CHANNEL, (_event, nextUrl: unknown) => {
   wsUrl = typeof nextUrl === "string" && nextUrl.length > 0 ? nextUrl : null;
@@ -22,6 +24,18 @@ ipcRenderer.on(BACKEND_WS_URL_UPDATED_CHANNEL, (_event, nextUrl: unknown) => {
 
 contextBridge.exposeInMainWorld("desktopBridge", {
   getWsUrl: () => wsUrl,
+  onBackendWsUrlUpdated: (listener) => {
+    listener(wsUrl);
+
+    const wrappedListener = (_event: Electron.IpcRendererEvent, nextUrl: unknown) => {
+      listener(typeof nextUrl === "string" && nextUrl.length > 0 ? nextUrl : null);
+    };
+
+    ipcRenderer.on(BACKEND_WS_URL_UPDATED_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(BACKEND_WS_URL_UPDATED_CHANNEL, wrappedListener);
+    };
+  },
   getSecret: (key) => ipcRenderer.invoke(SECRET_GET_CHANNEL, key),
   setSecret: (key, value) => ipcRenderer.invoke(SECRET_SET_CHANNEL, key, value),
   pickFolder: () => ipcRenderer.invoke(PICK_FOLDER_CHANNEL),

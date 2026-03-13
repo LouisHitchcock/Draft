@@ -275,14 +275,11 @@ describe("WsTransport", () => {
       channel: WS_CHANNELS.serverConfigUpdated,
       data: { issues: [], providers: [] },
     });
-    expect(warnSpy).toHaveBeenCalledTimes(2);
-    expect(warnSpy).toHaveBeenNthCalledWith(
-      1,
+    expect(warnSpy).toHaveBeenCalledWith(
       "Dropped inbound WebSocket envelope",
       "SyntaxError: Expected property name or '}' in JSON at position 2 (line 1 column 3)",
     );
-    expect(warnSpy).toHaveBeenNthCalledWith(
-      2,
+    expect(warnSpy).toHaveBeenCalledWith(
       "Dropped inbound WebSocket envelope",
       expect.stringContaining('Expected "server.configUpdated"'),
     );
@@ -345,6 +342,7 @@ describe("WsTransport", () => {
         .fn<() => string | null>()
         .mockReturnValueOnce("ws://127.0.0.1:4001")
         .mockReturnValueOnce("ws://127.0.0.1:4002"),
+      onBackendWsUrlUpdated: vi.fn(() => () => undefined),
     };
     Object.defineProperty(window, "desktopBridge", {
       configurable: true,
@@ -365,6 +363,51 @@ describe("WsTransport", () => {
 
     transport.dispose();
     vi.useRealTimers();
+  });
+
+  it("waits for the packaged desktop websocket url instead of falling back to the custom app origin", () => {
+    let emitBackendWsUrl: ((url: string | null) => void) | null = null;
+    let currentWsUrl: string | null = null;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: {
+        href: "t3://app/index.html",
+        protocol: "t3:",
+        hostname: "app",
+        port: "",
+        pathname: "/index.html",
+        search: "",
+        hash: "",
+      },
+    });
+    Object.defineProperty(window, "desktopBridge", {
+      configurable: true,
+      value: {
+        getWsUrl: vi.fn<() => string | null>(() => currentWsUrl),
+        onBackendWsUrlUpdated: vi.fn((listener: (url: string | null) => void) => {
+          listener(currentWsUrl);
+          emitBackendWsUrl = (url) => {
+            currentWsUrl = url;
+            listener(url);
+          };
+          return () => {
+            emitBackendWsUrl = null;
+          };
+        }),
+      },
+    });
+
+    const transport = new WsTransport();
+
+    expect(sockets).toHaveLength(0);
+
+    expect(emitBackendWsUrl).not.toBeNull();
+    emitBackendWsUrl!("ws://127.0.0.1:45321/?token=desktop-token");
+
+    const socket = getSocket();
+    expect(socket.url).toBe("ws://127.0.0.1:45321/?token=desktop-token");
+
+    transport.dispose();
   });
 
   it("omits the port delimiter when the page uses a default port", () => {

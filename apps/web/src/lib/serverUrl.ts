@@ -81,8 +81,11 @@ export function resolveConfiguredWsUrl(options?: { stripLocationToken?: boolean 
     stripFromLocation: options?.stripLocationToken === true,
   });
   const bridgeUrl = window.desktopBridge?.getWsUrl();
-  if (bridgeUrl && bridgeUrl.length > 0) {
-    return withWsAuthToken(bridgeUrl, authToken);
+  if (window.desktopBridge) {
+    if (bridgeUrl && bridgeUrl.length > 0) {
+      return withWsAuthToken(bridgeUrl, authToken);
+    }
+    return "";
   }
 
   const envUrl = import.meta.env.VITE_WS_URL as string | undefined;

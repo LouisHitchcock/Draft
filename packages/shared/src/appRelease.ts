@@ -12,6 +12,7 @@ export interface AppReleaseBranding {
   readonly displayName: string;
   readonly productName: string;
   readonly appId: string;
+  readonly stateDirName: string;
   readonly userDataDirName: string;
 }
 
@@ -45,6 +46,7 @@ export function resolveAppReleaseBranding(input: AppReleaseBrandingInput): AppRe
     displayName: `T3 Code (${stageLabel})`,
     productName: stageLabel === "Dev" ? `T3 Code (${stageLabel})` : DEFAULT_DESKTOP_PRODUCT_NAME,
     appId: stageLabel === "Dev" ? `${DEFAULT_DESKTOP_APP_ID}.dev` : DEFAULT_DESKTOP_APP_ID,
+    stateDirName: stageLabel === "Dev" ? "dev" : "userdata",
     userDataDirName: stageLabel === "Dev" ? "t3code-dev" : "t3code",
   };
 }

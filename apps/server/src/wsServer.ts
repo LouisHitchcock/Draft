@@ -1295,6 +1295,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       }
 
       if (providedToken !== authToken) {
+        console.warn("[ws] rejecting unauthorized websocket connection", {
+          mode: serverConfig.mode,
+          requestUrl: request.url ?? null,
+          originHeader,
+        });
         rejectUpgrade(socket, 401, "Unauthorized WebSocket connection");
         return;
       }
@@ -1308,6 +1313,12 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         allowNullOrigin: serverConfig.mode === "desktop",
       })
     ) {
+      console.warn("[ws] rejecting websocket origin", {
+        mode: serverConfig.mode,
+        requestUrl: request.url ?? null,
+        originHeader,
+        allowedOrigins: [...allowedWebSocketOrigins],
+      });
       rejectUpgrade(socket, 403, "Forbidden WebSocket origin");
       return;
     }

@@ -44,6 +44,7 @@ describe("resolveAppReleaseBranding", () => {
       displayName: "T3 Code (Dev)",
       productName: "T3 Code (Dev)",
       appId: "com.t3tools.t3code.dev",
+      stateDirName: "dev",
       userDataDirName: "t3code-dev",
     });
   });
@@ -54,6 +55,7 @@ describe("resolveAppReleaseBranding", () => {
       displayName: "T3 Code (Dev)",
       productName: "T3 Code (Dev)",
       appId: "com.t3tools.t3code.dev",
+      stateDirName: "dev",
       userDataDirName: "t3code-dev",
     });
   });
@@ -64,6 +66,7 @@ describe("resolveAppReleaseBranding", () => {
       displayName: "T3 Code (Dev)",
       productName: "T3 Code (Dev)",
       appId: "com.t3tools.t3code.dev",
+      stateDirName: "dev",
       userDataDirName: "t3code-dev",
     });
   });
@@ -74,6 +77,7 @@ describe("resolveAppReleaseBranding", () => {
       displayName: "T3 Code (Alpha)",
       productName: "T3 Code",
       appId: "com.t3tools.t3code",
+      stateDirName: "userdata",
       userDataDirName: "t3code",
     });
   });

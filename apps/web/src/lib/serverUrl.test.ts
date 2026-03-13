@@ -52,6 +52,7 @@ describe("resolveConfiguredWsUrl", () => {
         },
         desktopBridge: {
           getWsUrl: () => "ws://127.0.0.1:3773/base/",
+          onBackendWsUrlUpdated: () => () => undefined,
         },
       },
     });
@@ -63,5 +64,34 @@ describe("resolveConfiguredWsUrl", () => {
     );
     expect(resolveConfiguredWsUrl()).toBe("ws://127.0.0.1:3773/base/?token=secret-token");
     expect(replaceState).toHaveBeenCalledWith(null, "", "/chat?view=settings#plans");
+  });
+
+  it("waits for the desktop bridge websocket url instead of falling back to the packaged app origin", async () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        location: {
+          href: "t3://app/index.html",
+          protocol: "t3:",
+          hostname: "app",
+          port: "",
+          pathname: "/index.html",
+          search: "",
+          hash: "",
+        },
+        history: {
+          state: null,
+          replaceState: vi.fn(),
+        },
+        desktopBridge: {
+          getWsUrl: () => null,
+          onBackendWsUrlUpdated: () => () => undefined,
+        },
+      },
+    });
+
+    const { resolveConfiguredWsUrl } = await import("./serverUrl");
+
+    expect(resolveConfiguredWsUrl()).toBe("");
   });
 });

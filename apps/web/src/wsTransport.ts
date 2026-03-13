@@ -56,14 +56,29 @@ export class WsTransport {
   private readonly listeners = new Map<string, Set<(message: WsPush) => void>>();
   private readonly latestPushByChannel = new Map<string, WsPush>();
   private readonly stateListeners = new Set<(state: TransportState) => void>();
+  private readonly ignoredSockets = new WeakSet<WebSocket>();
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
   private state: TransportState = "connecting";
   private readonly explicitUrl: string | undefined;
+  private readonly unsubscribeBridgeWsUrl: (() => void) | null;
+  private currentResolvedUrl: string | null = null;
 
   constructor(url?: string) {
     this.explicitUrl = url;
+    this.unsubscribeBridgeWsUrl =
+      !url && typeof window !== "undefined" && window.desktopBridge
+        ? window.desktopBridge.onBackendWsUrlUpdated((nextUrl) => {
+            if (this.disposed || typeof nextUrl !== "string" || nextUrl.length === 0) {
+              return;
+            }
+            if (this.currentResolvedUrl === nextUrl && this.state !== "closed") {
+              return;
+            }
+            this.reconnectNow();
+          })
+        : null;
     this.connect();
   }
 
@@ -149,6 +164,7 @@ export class WsTransport {
   dispose() {
     this.disposed = true;
     this.setState("disposed");
+    this.unsubscribeBridgeWsUrl?.();
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -168,10 +184,20 @@ export class WsTransport {
     }
 
     this.setState(this.reconnectAttempt > 0 ? "reconnecting" : "connecting");
-    const ws = new WebSocket(this.explicitUrl ?? resolveDefaultWsUrl());
+    const resolvedUrl = this.explicitUrl ?? resolveDefaultWsUrl();
+    this.currentResolvedUrl = resolvedUrl || null;
+    if (!resolvedUrl) {
+      console.warn("WebSocket connect deferred awaiting desktop backend URL");
+      this.scheduleReconnect();
+      return;
+    }
+
+    console.warn(`WebSocket connecting url=${resolvedUrl}`);
+
+    const ws = new WebSocket(resolvedUrl);
+    this.ws = ws;
 
     ws.addEventListener("open", () => {
-      this.ws = ws;
       this.setState("open");
       this.reconnectAttempt = 0;
       this.flushPendingRequests();
@@ -182,6 +208,10 @@ export class WsTransport {
     });
 
     ws.addEventListener("close", () => {
+      if (this.ignoredSockets.has(ws)) {
+        this.ignoredSockets.delete(ws);
+        return;
+      }
       if (this.ws === ws) {
         this.ws = null;
       }
@@ -197,11 +227,34 @@ export class WsTransport {
 
     ws.addEventListener("error", (event) => {
       // Log WebSocket errors for debugging (close event will follow)
-      console.warn("WebSocket connection error", {
-        type: event.type,
-        url: this.explicitUrl ?? resolveDefaultWsUrl(),
-      });
+      const resolvedUrl = this.explicitUrl ?? resolveDefaultWsUrl();
+      console.warn(
+        `WebSocket connection error type=${event.type} url=${resolvedUrl || "<empty>"}`,
+      );
     });
+  }
+
+  private reconnectNow() {
+    if (this.disposed) {
+      return;
+    }
+
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    const activeSocket = this.ws;
+    if (activeSocket) {
+      this.ignoredSockets.add(activeSocket);
+      this.ws = null;
+      activeSocket.close();
+    }
+
+    this.latestPushByChannel.clear();
+    this.rejectSentPendingRequests();
+    this.reconnectAttempt = 0;
+    this.connect();
   }
 
   private handleMessage(raw: unknown) {

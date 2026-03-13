@@ -3,20 +3,22 @@ import { describe, expect, it } from "vitest";
 import { getLegacyUserDataDirNames, resolveDesktopUserDataPath } from "./userDataPath";
 
 describe("getLegacyUserDataDirNames", () => {
-  it("prioritizes the current app display name before older branded names", () => {
-    expect(getLegacyUserDataDirNames("T3 Code (Dev)")).toEqual([
-      "T3 Code (Dev)",
-      "T3 Code (Alpha)",
-      "T3 Code",
-    ]);
+  it("keeps dev builds isolated from alpha profile dirs", () => {
+    expect(
+      getLegacyUserDataDirNames({
+        appDisplayName: "T3 Code (Dev)",
+        stageLabel: "Dev",
+      }),
+    ).toEqual(["T3 Code (Dev)"]);
   });
 
-  it("includes both older branded names for migration coverage", () => {
-    expect(getLegacyUserDataDirNames("T3 Code (Alpha)")).toEqual([
-      "T3 Code (Alpha)",
-      "T3 Code (Dev)",
-      "T3 Code",
-    ]);
+  it("lets alpha builds recover the historical stable product dir", () => {
+    expect(
+      getLegacyUserDataDirNames({
+        appDisplayName: "T3 Code (Alpha)",
+        stageLabel: "Alpha",
+      }),
+    ).toEqual(["T3 Code (Alpha)", "T3 Code"]);
   });
 });
 
@@ -28,10 +30,13 @@ describe("resolveDesktopUserDataPath", () => {
       resolveDesktopUserDataPath({
         appDataBase: "/config",
         userDataDirName: "t3code-dev",
-        legacyDirNames: getLegacyUserDataDirNames("T3 Code (Dev)"),
+        legacyDirNames: getLegacyUserDataDirNames({
+          appDisplayName: "T3 Code (Dev)",
+          stageLabel: "Dev",
+        }),
         pathExists: (path) => existingPaths.has(path),
       }),
-    ).toBe("/config/T3 Code (Alpha)");
+    ).toBe("/config/t3code-dev");
   });
 
   it("falls back to the clean userData dir when no legacy dir exists", () => {
@@ -39,7 +44,10 @@ describe("resolveDesktopUserDataPath", () => {
       resolveDesktopUserDataPath({
         appDataBase: "/config",
         userDataDirName: "t3code-dev",
-        legacyDirNames: getLegacyUserDataDirNames("T3 Code (Dev)"),
+        legacyDirNames: getLegacyUserDataDirNames({
+          appDisplayName: "T3 Code (Dev)",
+          stageLabel: "Dev",
+        }),
         pathExists: () => false,
       }),
     ).toBe("/config/t3code-dev");
@@ -52,9 +60,28 @@ describe("resolveDesktopUserDataPath", () => {
       resolveDesktopUserDataPath({
         appDataBase: "/config",
         userDataDirName: "t3code",
-        legacyDirNames: getLegacyUserDataDirNames("T3 Code (Alpha)"),
+        legacyDirNames: getLegacyUserDataDirNames({
+          appDisplayName: "T3 Code (Alpha)",
+          stageLabel: "Alpha",
+        }),
         pathExists: (path) => existingPaths.has(path),
       }),
     ).toBe("/config/T3 Code");
+  });
+
+  it("keeps alpha builds isolated from dev-only profile dirs", () => {
+    const existingPaths = new Set(["/config/T3 Code (Dev)"]);
+
+    expect(
+      resolveDesktopUserDataPath({
+        appDataBase: "/config",
+        userDataDirName: "t3code",
+        legacyDirNames: getLegacyUserDataDirNames({
+          appDisplayName: "T3 Code (Alpha)",
+          stageLabel: "Alpha",
+        }),
+        pathExists: (path) => existingPaths.has(path),
+      }),
+    ).toBe("/config/t3code");
   });
 });
