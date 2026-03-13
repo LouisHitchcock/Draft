@@ -450,10 +450,16 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   productName: string,
   signed: boolean,
 ) {
+  const artifactName =
+    platform === "mac"
+      ? "CUT3-macOS-${version}-${arch}.${ext}"
+      : platform === "linux"
+        ? "CUT3-linux-${version}-${arch}.${ext}"
+        : "CUT3-windows-${version}-${arch}.${ext}";
   const buildConfig: Record<string, unknown> = {
     appId,
     productName,
-    artifactName: "CUT3-${version}-${arch}.${ext}",
+    artifactName,
     directories: {
       buildResources: "apps/desktop/resources",
     },

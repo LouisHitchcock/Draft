@@ -7,14 +7,15 @@ This document covers how to run desktop releases from one tag, first without sig
 - Trigger: push tag matching `v*.*.*`.
 - Runs quality gates first: lint, typecheck, test.
 - Builds four artifacts in parallel:
-  - macOS `arm64` DMG
-  - macOS `x64` DMG
-  - Linux `x64` AppImage
-  - Windows `x64` NSIS installer
+  - macOS `arm64` DMG and ZIP, named `CUT3-macOS-<version>-<arch>.<ext>`
+  - macOS `x64` DMG and ZIP, named `CUT3-macOS-<version>-<arch>.<ext>`
+  - Linux `x64` AppImage, named `CUT3-linux-<version>-<arch>.<ext>`
+  - Windows `x64` NSIS installer, named `CUT3-windows-<version>-<arch>.<ext>`
 - Publishes one GitHub Release with all produced files.
   - Versions with a suffix after `X.Y.Z` (for example `1.2.3-alpha.1`) are published as GitHub prereleases.
   - Only plain `X.Y.Z` releases are marked as the repository's latest release.
   - Desktop prerelease artifacts launch as `CUT3`, the same as stable builds.
+  - The GitHub Release title is `CUT3 v<version>`.
 - Includes Electron auto-update metadata (for example `latest*.yml` and `*.blockmap`) in release assets.
 - Optionally publishes the CLI package (`apps/server`, npm package `t3`) when explicitly enabled.
 - Signing is optional and auto-detected per platform from secrets.

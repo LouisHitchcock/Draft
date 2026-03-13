@@ -1,5 +1,9 @@
 # CUT3
 
+<p align="center">
+  <img src="./CUT3.png" alt="CUT3" width="144" />
+</p>
+
 CUT3 is a minimal web GUI for coding agents. It currently supports Codex, GitHub Copilot, and Kimi Code, with Claude Code coming soon.
 
 ## Supported providers
