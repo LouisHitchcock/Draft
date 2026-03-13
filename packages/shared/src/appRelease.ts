@@ -1,4 +1,6 @@
 const VERSION_PRERELEASE_PATTERN = /^\d+\.\d+\.\d+-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)$/;
+const DEFAULT_DESKTOP_PRODUCT_NAME = "T3 Code";
+const DEFAULT_DESKTOP_APP_ID = "com.t3tools.t3code";
 
 export interface AppReleaseBrandingInput {
   readonly version: string;
@@ -8,6 +10,8 @@ export interface AppReleaseBrandingInput {
 export interface AppReleaseBranding {
   readonly stageLabel: "Dev" | "Alpha";
   readonly displayName: string;
+  readonly productName: string;
+  readonly appId: string;
   readonly userDataDirName: string;
 }
 
@@ -29,13 +33,18 @@ export function isForkPrereleaseVersion(version: string): boolean {
   return getVersionPrereleaseTag(version) === "fork";
 }
 
+export function isPrereleaseVersion(version: string): boolean {
+  return getVersionPrereleaseTag(version) !== null;
+}
+
 export function resolveAppReleaseBranding(input: AppReleaseBrandingInput): AppReleaseBranding {
-  const stageLabel =
-    input.isDevelopment || isForkPrereleaseVersion(input.version) ? "Dev" : "Alpha";
+  const stageLabel = input.isDevelopment || isPrereleaseVersion(input.version) ? "Dev" : "Alpha";
 
   return {
     stageLabel,
     displayName: `T3 Code (${stageLabel})`,
+    productName: stageLabel === "Dev" ? `T3 Code (${stageLabel})` : DEFAULT_DESKTOP_PRODUCT_NAME,
+    appId: stageLabel === "Dev" ? `${DEFAULT_DESKTOP_APP_ID}.dev` : DEFAULT_DESKTOP_APP_ID,
     userDataDirName: stageLabel === "Dev" ? "t3code-dev" : "t3code",
   };
 }

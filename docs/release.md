@@ -14,6 +14,7 @@ This document covers how to run desktop releases from one tag, first without sig
 - Publishes one GitHub Release with all produced files.
   - Versions with a suffix after `X.Y.Z` (for example `1.2.3-alpha.1`) are published as GitHub prereleases.
   - Only plain `X.Y.Z` releases are marked as the repository's latest release.
+  - Desktop prerelease artifacts launch as `T3 Code (Dev)` so they stay distinct from stable Alpha installs.
 - Includes Electron auto-update metadata (for example `latest*.yml` and `*.blockmap`) in release assets.
 - Optionally publishes the CLI package (`apps/server`, npm package `t3`) when explicitly enabled.
 - Signing is optional and auto-detected per platform from secrets.
