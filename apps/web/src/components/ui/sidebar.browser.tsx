@@ -81,6 +81,53 @@ async function settle(): Promise<void> {
   });
 }
 
+function parseCssColor(value: string): [number, number, number] {
+  const match = /rgba?\(([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i.exec(value);
+  if (!match) {
+    throw new Error(`Unsupported color format: ${value}`);
+  }
+
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function relativeLuminance([red, green, blue]: [number, number, number]): number {
+  const linear = [red, green, blue].map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.04045
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+  const [r = 0, g = 0, b = 0] = linear;
+  return r * 0.2126 + g * 0.7152 + b * 0.0722;
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const fg = relativeLuminance(parseCssColor(foreground));
+  const bg = relativeLuminance(parseCssColor(background));
+  const lighter = Math.max(fg, bg);
+  const darker = Math.min(fg, bg);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function SidebarThemeContrastHarness() {
+  return (
+    <div data-testid="sidebar-surface" className="bg-sidebar text-sidebar-foreground p-4">
+      <button
+        type="button"
+        data-testid="sidebar-add-project-button"
+        className="inline-flex size-5 items-center justify-center rounded-md text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+      />
+      <button
+        type="button"
+        data-testid="sidebar-settings-button"
+        className="gap-2 px-2 py-1.5 text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+      >
+        Settings
+      </button>
+    </div>
+  );
+}
+
 describe("SidebarTrigger", () => {
   beforeEach(async () => {
     await page.viewport(1280, 900);
@@ -93,6 +140,7 @@ describe("SidebarTrigger", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
+    delete document.documentElement.dataset.theme;
   });
 
   it("toggles the desktop sidebar from the header trigger", async () => {
@@ -155,6 +203,38 @@ describe("SidebarTrigger", () => {
       await waitForSidebarState("expanded");
     } finally {
       await mounted.cleanup();
+    }
+  });
+
+  it("keeps sidebar action controls readable under custom themes", async () => {
+    document.documentElement.dataset.theme = "nord";
+
+    const host = document.createElement("div");
+    document.body.append(host);
+    const screen = await render(<SidebarThemeContrastHarness />, { container: host });
+
+    try {
+      const surface = document.querySelector<HTMLElement>("[data-testid='sidebar-surface']");
+      const addProjectButton = document.querySelector<HTMLElement>(
+        "[data-testid='sidebar-add-project-button']",
+      );
+      const settingsButton = document.querySelector<HTMLElement>(
+        "[data-testid='sidebar-settings-button']",
+      );
+
+      expect(surface).not.toBeNull();
+      expect(addProjectButton).not.toBeNull();
+      expect(settingsButton).not.toBeNull();
+
+      const surfaceBackground = window.getComputedStyle(surface!).backgroundColor;
+      const addProjectColor = window.getComputedStyle(addProjectButton!).color;
+      const settingsColor = window.getComputedStyle(settingsButton!).color;
+
+      expect(contrastRatio(addProjectColor, surfaceBackground)).toBeGreaterThan(4.5);
+      expect(contrastRatio(settingsColor, surfaceBackground)).toBeGreaterThan(4.5);
+    } finally {
+      await screen.unmount();
+      host.remove();
     }
   });
 });

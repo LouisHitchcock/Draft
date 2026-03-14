@@ -173,7 +173,7 @@ function ProjectFavicon({ cwd }: { cwd: string }) {
   const src = resolveServerHttpUrl(`/api/project-favicon?cwd=${encodeURIComponent(cwd)}`);
 
   if (status === "error") {
-    return <FolderIcon className="size-3.5 shrink-0 text-muted-foreground/50" />;
+    return <FolderIcon className="size-3.5 shrink-0 text-sidebar-foreground/70" />;
   }
 
   return (
@@ -1194,7 +1194,7 @@ export default function Sidebar() {
                     type="button"
                     aria-label="Add project"
                     aria-pressed={shouldShowProjectPathEntry}
-                    className="inline-flex size-5 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+                    className="inline-flex size-5 items-center justify-center rounded-md text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     onClick={handleStartAddProject}
                   />
                 }
@@ -1262,7 +1262,7 @@ export default function Sidebar() {
               <div className="mt-1.5 px-0.5">
                 <button
                   type="button"
-                  className="text-[11px] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+                  className="text-[11px] text-sidebar-foreground/75 transition-colors hover:text-sidebar-foreground"
                   onClick={() => {
                     setAddingProject(false);
                     setAddProjectError(null);
@@ -1326,7 +1326,7 @@ export default function Sidebar() {
                               }}
                             >
                               <ChevronRightIcon
-                                className={`-ml-0.5 size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150 ${
+                                className={`-ml-0.5 size-3.5 shrink-0 text-sidebar-foreground/80 transition-transform duration-150 ${
                                   project.expanded ? "rotate-90" : ""
                                 }`}
                               />
@@ -1347,7 +1347,7 @@ export default function Sidebar() {
                                       />
                                     }
                                     showOnHover
-                                    className="top-1 right-1 size-5 rounded-md p-0 text-muted-foreground/70 hover:bg-secondary hover:text-foreground"
+                                    className="top-1 right-1 size-5 rounded-md p-0 text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                                     onClick={(event) => {
                                       event.preventDefault();
                                       event.stopPropagation();
@@ -1560,7 +1560,7 @@ export default function Sidebar() {
                                     render={<button type="button" />}
                                     data-thread-selection-safe
                                     size="sm"
-                                    className="h-6 w-full translate-x-0 justify-start px-2 text-left text-[10px] text-muted-foreground/60 hover:bg-accent hover:text-muted-foreground/80"
+                                    className="h-6 w-full translate-x-0 justify-start px-2 text-left text-[10px] text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                                     onClick={() => {
                                       expandThreadListForProject(project.id);
                                     }}
@@ -1575,7 +1575,7 @@ export default function Sidebar() {
                                     render={<button type="button" />}
                                     data-thread-selection-safe
                                     size="sm"
-                                    className="h-6 w-full translate-x-0 justify-start px-2 text-left text-[10px] text-muted-foreground/60 hover:bg-accent hover:text-muted-foreground/80"
+                                    className="h-6 w-full translate-x-0 justify-start px-2 text-left text-[10px] text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                                     onClick={() => {
                                       collapseThreadListForProject(project.id);
                                     }}
@@ -1610,7 +1610,7 @@ export default function Sidebar() {
             {isOnSettings ? (
               <SidebarMenuButton
                 size="sm"
-                className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                className="gap-2 px-2 py-1.5 text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 onClick={() => window.history.back()}
               >
                 <ArrowLeftIcon className="size-3.5" />
@@ -1619,7 +1619,7 @@ export default function Sidebar() {
             ) : (
               <SidebarMenuButton
                 size="sm"
-                className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                className="gap-2 px-2 py-1.5 text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 onClick={() => void navigate({ to: "/settings" })}
               >
                 <SettingsIcon className="size-3.5" />
