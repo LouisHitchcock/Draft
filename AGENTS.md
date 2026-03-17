@@ -4,8 +4,10 @@
 
 - All of `bun run fmt`, `bun run lint`, and `bun run typecheck` must pass before considering tasks completed.
 - Always use `bun run test` (runs Vitest), not bare `bun test`.
+- Do not claim something works unless you verified it with the relevant tests, checks, or tool output.
 - If a change affects user-visible behavior, settings, build steps, release steps, or developer workflows, update the relevant documentation in the same change.
 - Treat stale docs as a bug. Check `README.md`, `.docs/*`, `docs/*`, and any task-specific guides touched by the feature.
+- Update `AGENTS.md` too when a task exposes a repeatable mistake, workflow correction, or durable lesson that should guide future work.
 - Keep provider availability claims in docs and onboarding copy aligned with `apps/web/src/session-logic.ts` and its tests.
 
 ## Project Snapshot
@@ -45,7 +47,7 @@ Priorities:
 <tool_persistence_rules>
 
 - Use tools whenever they materially improve correctness, completeness, or grounding.
-- Use subagents when possible to keep the main context window clear.
+- Use subagents proactively for bounded exploration, parallel read-only work, or other delegable tasks that keep the main context window clear.
 - Do not stop early when another inspection, search, or validation step would materially improve the result.
 - Keep going until the task is complete and verification passes.
 - If a lookup or test result is partial or suspiciously narrow, retry with a different strategy.
@@ -54,6 +56,8 @@ Priorities:
 <dependency_checks>
 
 - Before editing, inspect the relevant code paths and contracts.
+- If you do not know something, research it first. Do not assume runtime behavior, APIs, library semantics, or repository conventions.
+- Check source code and documentation before making implementation claims. Do not over-hallucinate or smooth over uncertainty.
 - Do not skip prerequisite discovery just because the final change seems obvious.
 - Resolve upstream/downstream dependencies before mutating code.
   </dependency_checks>
@@ -62,6 +66,7 @@ Priorities:
 
 - Treat the task as incomplete until all requested deliverables are handled or explicitly marked blocked.
 - Keep an internal checklist of affected runtime paths, UI paths, contracts, and tests.
+- Do not leave empty TODOs or placeholder follow-ups in fixes/features unless the user explicitly asked for staged work and the blocker is documented clearly.
 - If something is blocked, state exactly what is missing.
   </completeness_contract>
 
@@ -73,6 +78,7 @@ Before finalizing:
 - Check formatting and repo conventions.
 - Check whether tests/typecheck/lint relevant to the change should run.
 - Check whether any docs are now stale and update them before finishing.
+- Keep documentation current while working, not as an afterthought. Tracking reality in docs is part of the implementation.
 - Check that async UI controls expose a visible loading state and actionable error recovery, not only a disabled state.
 - For desktop startup, packaging, or release-flow changes, keep `apps/desktop/README.md`, `.docs/scripts.md`, `docs/release.md`, and the desktop smoke test aligned on what is actually guaranteed.
   </verification_loop>
@@ -81,6 +87,7 @@ Before finalizing:
 
 - If required context is missing, do not guess.
 - Prefer repo inspection first.
+- Be direct and realistic about uncertainty, failures, and tradeoffs. Do not sugarcoat problems or overstate confidence.
 - Ask only the minimal clarifying question when the answer cannot be derived locally.
   </missing_context_gating>
 
