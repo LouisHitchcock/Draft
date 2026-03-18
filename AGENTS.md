@@ -79,7 +79,7 @@ Before finalizing:
 - Check whether tests/typecheck/lint relevant to the change should run.
 - Check whether any docs are now stale and update them before finishing.
 - Keep documentation current while working, not as an afterthought. Tracking reality in docs is part of the implementation.
-- If the task included easy bounded work that could be delegated safely, prefer a subagent for that side work and keep final synthesis, risky edits, and verification in the main agent.
+- If the task included easy bounded work that could be delegated safely, prefer a GPT-5.4 Mini subagent for that side work and keep final synthesis, risky edits, and verification in the main agent.
 - For localization changes, keep the settings schema, document `lang`/`dir`, and locale-aware date/time formatting aligned. Do not ship a language toggle that only changes labels.
 - For mixed-language surfaces, do not flip the whole app shell to RTL just because one locale is RTL. Keep untranslated/shared shells LTR and scope RTL to the views that are actually localized, or English truncation and control ordering will regress.
 - Check that async UI controls expose a visible loading state and actionable error recovery, not only a disabled state.
