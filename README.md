@@ -119,5 +119,6 @@ We are not accepting contributions yet.
 ## If you REALLY want to contribute still.... read this first
 
 Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
+If you are using coding agents while contributing, also read [AGENTS.md](./AGENTS.md) for the current documentation hygiene and delegation rules.
 
 Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).

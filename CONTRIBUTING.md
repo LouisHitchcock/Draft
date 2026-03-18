@@ -50,6 +50,14 @@ If the change depends on motion, timing, transitions, or interaction details, in
 
 If we have to guess what changed, we are much less likely to review it.
 
+## Documentation And Agent Hygiene
+
+Treat stale docs as a bug.
+
+If your change affects behavior, settings, build steps, release steps, or contributor workflows, update the relevant docs in the same PR. That includes `README.md`, `AGENTS.md`, `CONTRIBUTING.md`, `.docs/*`, `docs/*`, and any task-specific guide touched by the change.
+
+If you use coding agents, delegate easy bounded work like repo scans, read-only checks, and doc audits to sub agents when that keeps the main review and edit loop clearer. Keep risky edits, final synthesis, and verification owned by the primary agent or author.
+
 ## Issues First
 
 If you are thinking about a non-trivial change, open an issue first.

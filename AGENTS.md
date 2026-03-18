@@ -5,8 +5,8 @@
 - All of `bun run fmt`, `bun run lint`, and `bun run typecheck` must pass before considering tasks completed.
 - Always use `bun run test` (runs Vitest), not bare `bun test`.
 - Do not claim something works unless you verified it with the relevant tests, checks, or tool output.
-- If a change affects user-visible behavior, settings, build steps, release steps, or developer workflows, update the relevant documentation in the same change.
-- Treat stale docs as a bug. Check `README.md`, `.docs/*`, `docs/*`, and any task-specific guides touched by the feature.
+- If a change affects user-visible behavior, settings, build steps, release steps, or developer workflows, update the relevant documentation in the same change as part of the implementation.
+- Treat stale docs as a bug. A task is not complete until `README.md`, `CONTRIBUTING.md`, `.docs/*`, `docs/*`, and any task-specific guides touched by the change are accurate.
 - Update `AGENTS.md` too when a task exposes a repeatable mistake, workflow correction, or durable lesson that should guide future work.
 - Keep provider availability claims in docs and onboarding copy aligned with `apps/web/src/session-logic.ts` and its tests.
 
@@ -47,7 +47,7 @@ Priorities:
 <tool_persistence_rules>
 
 - Use tools whenever they materially improve correctness, completeness, or grounding.
-- Use subagents proactively for bounded exploration, parallel read-only work, or other delegable tasks that keep the main context window clear.
+- Use subagents proactively for bounded exploration, parallel read-only work, or other delegable tasks that keep the main context window clear; prefer sub agents for easier bounded tasks such as repo scans, doc audits, and other low-risk side work.
 - Do not stop early when another inspection, search, or validation step would materially improve the result.
 - Keep going until the task is complete and verification passes.
 - If a lookup or test result is partial or suspiciously narrow, retry with a different strategy.
@@ -79,6 +79,7 @@ Before finalizing:
 - Check whether tests/typecheck/lint relevant to the change should run.
 - Check whether any docs are now stale and update them before finishing.
 - Keep documentation current while working, not as an afterthought. Tracking reality in docs is part of the implementation.
+- If the task included easy bounded work that could be delegated safely, prefer a subagent for that side work and keep final synthesis, risky edits, and verification in the main agent.
 - For localization changes, keep the settings schema, document `lang`/`dir`, and locale-aware date/time formatting aligned. Do not ship a language toggle that only changes labels.
 - For mixed-language surfaces, do not flip the whole app shell to RTL just because one locale is RTL. Keep untranslated/shared shells LTR and scope RTL to the views that are actually localized, or English truncation and control ordering will regress.
 - Check that async UI controls expose a visible loading state and actionable error recovery, not only a disabled state.
