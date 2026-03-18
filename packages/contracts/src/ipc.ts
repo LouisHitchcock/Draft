@@ -29,6 +29,8 @@ import type {
   ServerCopilotReasoningProbe,
   ServerCopilotReasoningProbeInput,
   ServerCopilotUsage,
+  ServerOpenCodeState,
+  ServerOpenCodeStateInput,
 } from "./server";
 import type {
   TerminalClearInput,
@@ -171,6 +173,7 @@ export interface NativeApi {
     probeCopilotReasoning: (
       input: ServerCopilotReasoningProbeInput,
     ) => Promise<ServerCopilotReasoningProbe>;
+    getOpenCodeState: (input?: ServerOpenCodeStateInput) => Promise<ServerOpenCodeState>;
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
   };
   orchestration: {

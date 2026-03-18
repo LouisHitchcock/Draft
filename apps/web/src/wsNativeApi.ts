@@ -21,6 +21,7 @@ import {
   ServerConfig,
   ServerCopilotReasoningProbe,
   ServerCopilotUsage,
+  ServerOpenCodeState,
   ServerUpsertKeybindingResult,
   TerminalSessionSnapshot,
   WS_CHANNELS,
@@ -232,6 +233,8 @@ export function createWsNativeApi(): NativeApi {
           ServerCopilotReasoningProbe,
           input,
         ),
+      getOpenCodeState: (input) =>
+        requestWithSchema(WS_METHODS.serverGetOpenCodeState, ServerOpenCodeState, input ?? {}),
       upsertKeybinding: (input) =>
         requestWithSchema(WS_METHODS.serverUpsertKeybinding, ServerUpsertKeybindingResult, input),
     },

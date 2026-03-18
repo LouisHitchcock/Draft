@@ -60,6 +60,8 @@ import {
   ServerCopilotReasoningProbe,
   ServerCopilotReasoningProbeInput,
   ServerCopilotUsage,
+  ServerOpenCodeState,
+  ServerOpenCodeStateInput,
   ServerUpsertKeybindingResult,
 } from "./server";
 
@@ -101,6 +103,7 @@ export const WS_METHODS = {
   serverGetConfig: "server.getConfig",
   serverGetCopilotUsage: "server.getCopilotUsage",
   serverProbeCopilotReasoning: "server.probeCopilotReasoning",
+  serverGetOpenCodeState: "server.getOpenCodeState",
   serverUpsertKeybinding: "server.upsertKeybinding",
 } as const;
 
@@ -167,6 +170,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.serverGetConfig, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverGetCopilotUsage, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverProbeCopilotReasoning, ServerCopilotReasoningProbeInput),
+  tagRequestBody(WS_METHODS.serverGetOpenCodeState, ServerOpenCodeStateInput),
   tagRequestBody(WS_METHODS.serverUpsertKeybinding, KeybindingRule),
 ]);
 
@@ -290,6 +294,7 @@ export const WsRpcResultSchemaByMethod = {
   [WS_METHODS.serverGetConfig]: ServerConfig,
   [WS_METHODS.serverGetCopilotUsage]: ServerCopilotUsage,
   [WS_METHODS.serverProbeCopilotReasoning]: ServerCopilotReasoningProbe,
+  [WS_METHODS.serverGetOpenCodeState]: ServerOpenCodeState,
   [WS_METHODS.serverUpsertKeybinding]: ServerUpsertKeybindingResult,
 } as const;
 

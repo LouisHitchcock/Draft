@@ -331,6 +331,7 @@ function buildProviderOptionsForDispatch(input: {
     readonly codexHomePath: string;
     readonly openRouterApiKey: string;
     readonly copilotBinaryPath: string;
+    readonly opencodeBinaryPath: string;
     readonly kimiBinaryPath: string;
     readonly kimiApiKey: string;
   };
@@ -339,6 +340,7 @@ function buildProviderOptionsForDispatch(input: {
   const codexHomePath = input.settings.codexHomePath.trim();
   const openRouterApiKey = input.settings.openRouterApiKey.trim();
   const copilotBinaryPath = input.settings.copilotBinaryPath.trim();
+  const opencodeBinaryPath = input.settings.opencodeBinaryPath.trim();
   const kimiBinaryPath = input.settings.kimiBinaryPath.trim();
   const kimiApiKey = input.settings.kimiApiKey.trim();
 
@@ -358,6 +360,14 @@ function buildProviderOptionsForDispatch(input: {
         ? {
             copilot: {
               binaryPath: copilotBinaryPath,
+            },
+          }
+        : undefined;
+    case "opencode":
+      return opencodeBinaryPath
+        ? {
+            opencode: {
+              binaryPath: opencodeBinaryPath,
             },
           }
         : undefined;
@@ -384,6 +394,8 @@ function getCustomModelsForProvider(
       return settings.customCodexModels;
     case "copilot":
       return settings.customCopilotModels;
+    case "opencode":
+      return settings.customOpencodeModels;
     case "kimi":
       return settings.customKimiModels;
     default:
@@ -394,6 +406,7 @@ function getCustomModelsForProvider(
 type ProviderCustomModelSettings = {
   readonly customCodexModels: readonly string[];
   readonly customCopilotModels: readonly string[];
+  readonly customOpencodeModels: readonly string[];
   readonly customKimiModels: readonly string[];
 };
 
@@ -1106,6 +1119,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
       copilot: deriveConfiguredModelOptions(
         activeThread?.activities ?? EMPTY_ACTIVITIES,
         "copilot",
+      ),
+      opencode: deriveConfiguredModelOptions(
+        activeThread?.activities ?? EMPTY_ACTIVITIES,
+        "opencode",
       ),
       kimi: deriveConfiguredModelOptions(activeThread?.activities ?? EMPTY_ACTIVITIES, "kimi"),
     }),
@@ -3877,9 +3894,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
     () => ({
       customCodexModels: settings.customCodexModels,
       customCopilotModels: settings.customCopilotModels,
+      customOpencodeModels: settings.customOpencodeModels,
       customKimiModels: settings.customKimiModels,
     }),
-    [settings.customCodexModels, settings.customCopilotModels, settings.customKimiModels],
+    [
+      settings.customCodexModels,
+      settings.customCopilotModels,
+      settings.customOpencodeModels,
+      settings.customKimiModels,
+    ],
   );
 
   const onProviderModelSelect = useCallback(
@@ -6627,10 +6650,7 @@ function isAvailableProviderOption(option: (typeof PROVIDER_OPTIONS)[number]): o
 
 const AVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(isAvailableProviderOption);
 const UNAVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter((option) => !option.available);
-const COMING_SOON_PROVIDER_OPTIONS = [
-  { id: "opencode", label: "OpenCode", icon: OpenCodeIcon },
-  { id: "gemini", label: "Gemini", icon: Gemini },
-] as const;
+const COMING_SOON_PROVIDER_OPTIONS = [{ id: "gemini", label: "Gemini", icon: Gemini }] as const;
 
 function mergeModelOptions(
   base: ReadonlyArray<{ slug: string; name: string }>,
@@ -6676,6 +6696,7 @@ function getCustomModelOptionsByProvider(
   settings: {
     customCodexModels: readonly string[];
     customCopilotModels: readonly string[];
+    customOpencodeModels: readonly string[];
     customKimiModels: readonly string[];
   },
   configuredModelsByProvider: Record<ProviderKind, ReadonlyArray<{ slug: string; name: string }>>,
@@ -6685,6 +6706,10 @@ function getCustomModelOptionsByProvider(
     copilot: mergeModelOptions(
       getAppModelOptions("copilot", settings.customCopilotModels),
       configuredModelsByProvider.copilot,
+    ),
+    opencode: mergeModelOptions(
+      getAppModelOptions("opencode", settings.customOpencodeModels),
+      configuredModelsByProvider.opencode,
     ),
     kimi: mergeModelOptions(
       getAppModelOptions("kimi", settings.customKimiModels),
@@ -6698,6 +6723,7 @@ const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
   openrouter: OpenRouterIcon,
   copilot: GitHubIcon,
   kimi: KimiIcon,
+  opencode: OpenCodeIcon,
   claudeCode: ClaudeAI,
   cursor: CursorIcon,
 };
@@ -6714,6 +6740,8 @@ function getModelOptionsForProviderPicker(
       return modelOptionsByProvider.codex.filter((option) => !isCodexOpenRouterModel(option.slug));
     case "copilot":
       return modelOptionsByProvider.copilot;
+    case "opencode":
+      return modelOptionsByProvider.opencode;
     case "kimi":
       return modelOptionsByProvider.kimi;
     default:
