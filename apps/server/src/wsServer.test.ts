@@ -26,6 +26,7 @@ import {
   type WebSocketResponse,
   type ProviderRuntimeEvent,
   type ServerProviderStatus,
+  type ServerOpenCodeState,
   type KeybindingsConfig,
   type ResolvedKeybindingsConfig,
   type WsPushChannel,
@@ -47,6 +48,7 @@ import { makeSqlitePersistenceLive, SqlitePersistenceMemory } from "./persistenc
 import { SqlClient, SqlError } from "effect/unstable/sql";
 import { ProviderService, type ProviderServiceShape } from "./provider/Services/ProviderService";
 import { ProviderHealth, type ProviderHealthShape } from "./provider/Services/ProviderHealth";
+import { OpenCodeState, type OpenCodeStateShape } from "./provider/Services/OpenCodeState";
 import { Open, type OpenShape } from "./open";
 import { GitManager, type GitManagerShape } from "./git/Services/GitManager.ts";
 import type { GitCoreShape } from "./git/Services/GitCore.ts";
@@ -78,6 +80,26 @@ const defaultProviderStatuses: ReadonlyArray<ServerProviderStatus> = [
 
 const defaultProviderHealthService: ProviderHealthShape = {
   getStatuses: Effect.succeed(defaultProviderStatuses),
+};
+
+const defaultOpenCodeStateService: OpenCodeStateShape = {
+  getState: (input) =>
+    Effect.succeed({
+      status: "unavailable",
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+      checkedCwd: input?.cwd?.trim() || "/test/project",
+      binaryPath: input?.binaryPath?.trim() || "opencode",
+      credentials: [],
+      models: [],
+      mcpSupported: false,
+      mcpServers: [],
+      configSources: [],
+      message: "OpenCode state disabled for tests.",
+    } satisfies ServerOpenCodeState),
+  addCredential: () =>
+    Effect.succeed({ success: false, message: "OpenCode state disabled for tests." }),
+  removeCredential: () =>
+    Effect.succeed({ success: false, message: "OpenCode state disabled for tests." }),
 };
 
 class MockTerminalManager implements TerminalManagerShape {
@@ -495,6 +517,7 @@ describe("WebSocket Server", () => {
       staticDir?: string;
       providerLayer?: Layer.Layer<ProviderService, never>;
       providerHealth?: ProviderHealthShape;
+      openCodeState?: OpenCodeStateShape;
       open?: OpenShape;
       gitManager?: GitManagerShape;
       gitCore?: Pick<GitCoreShape, "listBranches" | "initRepo" | "pullCurrentBranch">;
@@ -530,6 +553,7 @@ describe("WebSocket Server", () => {
     } satisfies ServerConfigShape);
     const infrastructureLayer = providerLayer.pipe(Layer.provideMerge(persistenceLayer));
     const runtimeOverrides = Layer.mergeAll(
+      Layer.succeed(OpenCodeState, options.openCodeState ?? defaultOpenCodeStateService),
       options.gitManager ? Layer.succeed(GitManager, options.gitManager) : Layer.empty,
       options.gitCore
         ? Layer.succeed(GitCore, options.gitCore as unknown as GitCoreShape)
@@ -1011,9 +1035,178 @@ describe("WebSocket Server", () => {
           supported: false,
           servers: [],
         },
+        {
+          provider: "opencode",
+          supported: false,
+          servers: [],
+        },
       ]),
     );
   });
+
+  it("surfaces inspected OpenCode MCP servers in server.getConfig", async () => {
+    const stateDir = makeTempDir("cut3-state-get-config-opencode-mcp-");
+    const keybindingsPath = path.join(stateDir, "keybindings.json");
+    fs.writeFileSync(keybindingsPath, "[]", "utf8");
+
+    server = await createTestServer({
+      cwd: "/my/workspace",
+      stateDir,
+      openCodeState: {
+        getState: () =>
+          Effect.succeed({
+            status: "available",
+            fetchedAt: "2026-01-01T00:00:00.000Z",
+            checkedCwd: "/my/workspace",
+            binaryPath: "opencode",
+            credentials: [],
+            models: [],
+            mcpSupported: true,
+            mcpServers: [
+              {
+                name: "context7",
+                enabled: true,
+                state: "enabled",
+                authStatus: "not_logged_in",
+                toolCount: 0,
+                resourceCount: 0,
+                resourceTemplateCount: 0,
+                connectionStatus: "connected",
+                target: "https://mcp.context7.com/mcp",
+              },
+            ],
+            configSources: [],
+          } satisfies ServerOpenCodeState),
+        addCredential: () =>
+          Effect.succeed({ success: false, message: "OpenCode state disabled for tests." }),
+        removeCredential: () =>
+          Effect.succeed({ success: false, message: "OpenCode state disabled for tests." }),
+      },
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.serverGetConfig);
+    expect(response.error).toBeUndefined();
+    expect((response.result as { mcpServers: unknown }).mcpServers).toEqual(
+      expect.arrayContaining([
+        {
+          provider: "opencode",
+          supported: true,
+          servers: [
+            {
+              name: "context7",
+              enabled: true,
+              state: "enabled",
+              authStatus: "not_logged_in",
+              toolCount: 0,
+              resourceCount: 0,
+              resourceTemplateCount: 0,
+              connectionStatus: "connected",
+              target: "https://mcp.context7.com/mcp",
+            },
+          ],
+        },
+      ]),
+    );
+  });
+
+  it("refreshes cached OpenCode MCP servers after runtime inspection", async () => {
+    const stateDir = makeTempDir("cut3-state-get-config-opencode-mcp-refresh-");
+    const keybindingsPath = path.join(stateDir, "keybindings.json");
+    fs.writeFileSync(keybindingsPath, "[]", "utf8");
+
+    let currentServerName = "context7";
+    const readOpenCodeState = (): ServerOpenCodeState => ({
+      status: "available",
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+      checkedCwd: "/my/workspace",
+      binaryPath: "opencode",
+      credentials: [],
+      models: [],
+      mcpSupported: true,
+      mcpServers: [
+        {
+          name: currentServerName,
+          enabled: true,
+          state: "enabled",
+          authStatus: "not_logged_in",
+          toolCount: 0,
+          resourceCount: 0,
+          resourceTemplateCount: 0,
+          connectionStatus: "connected",
+          target: `https://${currentServerName}.example.com/mcp`,
+        },
+      ],
+      configSources: [],
+    });
+
+    server = await createTestServer({
+      cwd: "/my/workspace",
+      stateDir,
+      openCodeState: {
+        getState: () => Effect.succeed(readOpenCodeState()),
+        addCredential: () =>
+          Effect.succeed({ success: false, message: "OpenCode state disabled for tests." }),
+        removeCredential: () =>
+          Effect.succeed({ success: false, message: "OpenCode state disabled for tests." }),
+      },
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const initialConfig = await sendRequest(ws, WS_METHODS.serverGetConfig);
+    expect(initialConfig.error).toBeUndefined();
+    expect(
+      (initialConfig.result as { mcpServers: Array<{ provider: string; servers: unknown[] }> })
+        .mcpServers,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          provider: "opencode",
+          servers: [
+            expect.objectContaining({
+              name: "context7",
+            }),
+          ],
+        }),
+      ]),
+    );
+
+    currentServerName = "github";
+    const refreshedRuntime = await sendRequest(ws, WS_METHODS.serverGetOpenCodeState, {
+      cwd: "/my/workspace",
+      refreshModels: true,
+    });
+    expect(refreshedRuntime.error).toBeUndefined();
+    expect((refreshedRuntime.result as { mcpServers: Array<{ name: string }> }).mcpServers).toEqual(
+      [expect.objectContaining({ name: "github" })],
+    );
+
+    const refreshedConfig = await sendRequest(ws, WS_METHODS.serverGetConfig);
+    expect(refreshedConfig.error).toBeUndefined();
+    expect(
+      (refreshedConfig.result as { mcpServers: Array<{ provider: string; servers: unknown[] }> })
+        .mcpServers,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          provider: "opencode",
+          servers: [
+            expect.objectContaining({
+              name: "github",
+            }),
+          ],
+        }),
+      ]),
+    );
+  }, 15_000);
 
   it("bootstraps default keybindings file when missing", async () => {
     const stateDir = makeTempDir("cut3-state-bootstrap-keybindings-");

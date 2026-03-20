@@ -19,6 +19,12 @@ import type {
   GitStatusResult,
 } from "./git";
 import type {
+  ProjectAgentsFileInput,
+  ProjectAgentsFileResult,
+  ProjectDraftAgentsFileInput,
+  ProjectDraftAgentsFileResult,
+  ProjectListCommandTemplatesInput,
+  ProjectListCommandTemplatesResult,
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
   ProjectWriteFileInput,
@@ -141,6 +147,11 @@ export interface NativeApi {
   };
   projects: {
     searchEntries: (input: ProjectSearchEntriesInput) => Promise<ProjectSearchEntriesResult>;
+    readAgentsFile: (input: ProjectAgentsFileInput) => Promise<ProjectAgentsFileResult>;
+    draftAgentsFile: (input: ProjectDraftAgentsFileInput) => Promise<ProjectDraftAgentsFileResult>;
+    listCommandTemplates: (
+      input: ProjectListCommandTemplatesInput,
+    ) => Promise<ProjectListCommandTemplatesResult>;
     writeFile: (input: ProjectWriteFileInput) => Promise<ProjectWriteFileResult>;
   };
   shell: {

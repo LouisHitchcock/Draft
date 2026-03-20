@@ -7,6 +7,7 @@ import {
   expandCollapsedComposerCursor,
   isCollapsedCursorAdjacentToMention,
   parseStandaloneComposerSlashCommand,
+  parseStandaloneComposerSlashInvocation,
   replaceTextRange,
 } from "./composer-logic";
 
@@ -246,7 +247,25 @@ describe("parseStandaloneComposerSlashCommand", () => {
     expect(parseStandaloneComposerSlashCommand("/default")).toBe("default");
   });
 
+  it("parses standalone /init command", () => {
+    expect(parseStandaloneComposerSlashCommand("/init")).toBe("init");
+  });
+
   it("ignores slash commands with extra message text", () => {
     expect(parseStandaloneComposerSlashCommand("/plan explain this")).toBeNull();
+  });
+});
+
+describe("parseStandaloneComposerSlashInvocation", () => {
+  it("parses custom slash command invocations with arguments", () => {
+    expect(parseStandaloneComposerSlashInvocation("/fix-tests src/web")).toEqual({
+      command: "fix-tests",
+      argumentsText: "src/web",
+    });
+  });
+
+  it("ignores /model and /mcp control commands", () => {
+    expect(parseStandaloneComposerSlashInvocation("/model gpt-5")).toBeNull();
+    expect(parseStandaloneComposerSlashInvocation("/mcp filesystem")).toBeNull();
   });
 });

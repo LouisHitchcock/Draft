@@ -23,6 +23,7 @@ import { ProviderAdapterRequestError, ProviderServiceError } from "../../provide
 import { takeTransientTurnStartProviderOptions } from "../../provider/transientProviderOptions.ts";
 import { TextGeneration } from "../../git/Services/TextGeneration.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
+import { readProjectAgentsFile } from "../../projectWorkspaceMetadata.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import {
   ProviderCommandReactor,
@@ -45,6 +46,25 @@ type ProviderIntentEvent = Extract<
 function toNonEmptyProviderInput(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
+function applyWorkspaceAgentsInstructions(input: {
+  readonly agentsContents: string | undefined;
+  readonly messageText: string;
+}): string {
+  const instructions = input.agentsContents?.trim();
+  if (!instructions || instructions.length === 0) {
+    return input.messageText;
+  }
+  return [
+    '<workspace_instructions source="AGENTS.md">',
+    instructions,
+    "</workspace_instructions>",
+    "",
+    "<user_request>",
+    input.messageText,
+    "</user_request>",
+  ].join("\n");
 }
 
 function mapProviderSessionStatusToOrchestrationStatus(
@@ -410,6 +430,14 @@ const make = Effect.gen(function* () {
     if (!thread) {
       return;
     }
+    const readModel = yield* orchestrationEngine.getReadModel();
+    const workspaceCwd = resolveThreadWorkspaceCwd({
+      thread,
+      projects: readModel.projects,
+    });
+    const workspaceAgentsFile = workspaceCwd
+      ? readProjectAgentsFile({ cwd: workspaceCwd, includeContents: true })
+      : null;
     if (input.providerOptions !== undefined) {
       threadProviderOptions.set(input.threadId, input.providerOptions);
     }
@@ -419,7 +447,13 @@ const make = Effect.gen(function* () {
       ...(input.modelOptions !== undefined ? { modelOptions: input.modelOptions } : {}),
       ...(input.providerOptions !== undefined ? { providerOptions: input.providerOptions } : {}),
     });
-    const normalizedInput = toNonEmptyProviderInput(input.messageText);
+    const normalizedInput = toNonEmptyProviderInput(
+      applyWorkspaceAgentsInstructions({
+        agentsContents:
+          workspaceAgentsFile?.status === "available" ? workspaceAgentsFile.contents : undefined,
+        messageText: input.messageText,
+      }),
+    );
     const normalizedAttachments = input.attachments ?? [];
     const activeSession = yield* providerService
       .listSessions()

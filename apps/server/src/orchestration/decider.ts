@@ -2,6 +2,7 @@ import type {
   OrchestrationCommand,
   OrchestrationEvent,
   OrchestrationReadModel,
+  OrchestrationThread,
 } from "@t3tools/contracts";
 import { Effect } from "effect";
 
@@ -16,6 +17,13 @@ import {
 
 const nowIso = () => new Date().toISOString();
 const DEFAULT_ASSISTANT_DELIVERY_MODE = "buffered" as const;
+const FORK_EXCLUDED_ACTIVITY_KINDS = new Set([
+  "approval.requested",
+  "approval.resolved",
+  "provider.approval.respond.failed",
+  "user-input.requested",
+  "user-input.resolved",
+]);
 
 const defaultMetadata: Omit<OrchestrationEvent, "sequence" | "type" | "payload"> = {
   eventId: crypto.randomUUID() as OrchestrationEvent["eventId"],
@@ -67,6 +75,283 @@ function findLatestThreadActivityForRequest(
       }
       return "requestId" in payload && payload.requestId === requestId;
     });
+}
+
+function compareThreadMessages(
+  left: OrchestrationThread["messages"][number],
+  right: OrchestrationThread["messages"][number],
+): number {
+  return left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id);
+}
+
+function compareThreadActivities(
+  left: OrchestrationThread["activities"][number],
+  right: OrchestrationThread["activities"][number],
+): number {
+  if (left.sequence !== undefined && right.sequence !== undefined) {
+    if (left.sequence !== right.sequence) {
+      return left.sequence - right.sequence;
+    }
+  } else if (left.sequence !== undefined) {
+    return 1;
+  } else if (right.sequence !== undefined) {
+    return -1;
+  }
+
+  return left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id);
+}
+
+function compareThreadProposedPlans(
+  left: OrchestrationThread["proposedPlans"][number],
+  right: OrchestrationThread["proposedPlans"][number],
+): number {
+  return left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id);
+}
+
+function compareThreadCheckpoints(
+  left: OrchestrationThread["checkpoints"][number],
+  right: OrchestrationThread["checkpoints"][number],
+): number {
+  if (left.checkpointTurnCount !== right.checkpointTurnCount) {
+    return left.checkpointTurnCount - right.checkpointTurnCount;
+  }
+  return (
+    left.completedAt.localeCompare(right.completedAt) || left.turnId.localeCompare(right.turnId)
+  );
+}
+
+function retainForkMessagesAfterTurnCount(
+  messages: ReadonlyArray<OrchestrationThread["messages"][number]>,
+  retainedTurnIds: ReadonlySet<string>,
+  turnCount: number,
+): ReadonlyArray<OrchestrationThread["messages"][number]> {
+  const retainedMessageIds = new Set<string>();
+  for (const message of messages) {
+    if (message.role === "system") {
+      retainedMessageIds.add(message.id);
+      continue;
+    }
+    if (message.turnId !== null && retainedTurnIds.has(message.turnId)) {
+      retainedMessageIds.add(message.id);
+    }
+  }
+
+  const retainedUserCount = messages.filter(
+    (message) => message.role === "user" && retainedMessageIds.has(message.id),
+  ).length;
+  const missingUserCount = Math.max(0, turnCount - retainedUserCount);
+  if (missingUserCount > 0) {
+    const fallbackUserMessages = messages
+      .filter(
+        (message) =>
+          message.role === "user" &&
+          !retainedMessageIds.has(message.id) &&
+          (message.turnId === null || retainedTurnIds.has(message.turnId)),
+      )
+      .toSorted(compareThreadMessages)
+      .slice(0, missingUserCount);
+    for (const message of fallbackUserMessages) {
+      retainedMessageIds.add(message.id);
+    }
+  }
+
+  const retainedAssistantCount = messages.filter(
+    (message) => message.role === "assistant" && retainedMessageIds.has(message.id),
+  ).length;
+  const missingAssistantCount = Math.max(0, turnCount - retainedAssistantCount);
+  if (missingAssistantCount > 0) {
+    const fallbackAssistantMessages = messages
+      .filter(
+        (message) =>
+          message.role === "assistant" &&
+          !retainedMessageIds.has(message.id) &&
+          (message.turnId === null || retainedTurnIds.has(message.turnId)),
+      )
+      .toSorted(compareThreadMessages)
+      .slice(0, missingAssistantCount);
+    for (const message of fallbackAssistantMessages) {
+      retainedMessageIds.add(message.id);
+    }
+  }
+
+  return messages.filter((message) => retainedMessageIds.has(message.id));
+}
+
+function shouldCopyForkActivity(activity: OrchestrationThread["activities"][number]): boolean {
+  return !FORK_EXCLUDED_ACTIVITY_KINDS.has(activity.kind);
+}
+
+function getEntryTimestamp(entry: { createdAt: string; updatedAt?: string }): string {
+  return entry.updatedAt ?? entry.createdAt;
+}
+
+function shouldRetainMessageForkEntry(input: {
+  readonly entryTurnId: string | null;
+  readonly entryTimestamp: string;
+  readonly retainedTurnIds: ReadonlySet<string>;
+  readonly cutoffAt: string | null;
+  readonly boundaryTurnId: string | null;
+}): boolean {
+  if (input.entryTurnId === null) {
+    return input.cutoffAt !== null && input.entryTimestamp <= input.cutoffAt;
+  }
+
+  if (!input.retainedTurnIds.has(input.entryTurnId)) {
+    return false;
+  }
+
+  if (
+    input.cutoffAt !== null &&
+    input.boundaryTurnId !== null &&
+    input.entryTurnId === input.boundaryTurnId
+  ) {
+    return input.entryTimestamp <= input.cutoffAt;
+  }
+
+  return true;
+}
+
+function buildForkSnapshot(input: {
+  readonly command: Extract<OrchestrationCommand, { type: "thread.fork" }>;
+  readonly sourceThread: OrchestrationThread;
+}): Effect.Effect<
+  {
+    readonly messages: ReadonlyArray<OrchestrationThread["messages"][number]>;
+    readonly proposedPlans: ReadonlyArray<OrchestrationThread["proposedPlans"][number]>;
+    readonly checkpoints: ReadonlyArray<OrchestrationThread["checkpoints"][number]>;
+    readonly activities: ReadonlyArray<OrchestrationThread["activities"][number]>;
+  },
+  OrchestrationCommandInvariantError
+> {
+  const { command, sourceThread } = input;
+  const orderedMessages = [...sourceThread.messages].toSorted(compareThreadMessages);
+  const orderedProposedPlans = [...sourceThread.proposedPlans].toSorted(compareThreadProposedPlans);
+  const orderedCheckpoints = [...sourceThread.checkpoints].toSorted(compareThreadCheckpoints);
+  const orderedActivities = [...sourceThread.activities].toSorted(compareThreadActivities);
+  const forkSource = command.source;
+
+  const retainTimestampScopedEntries = <
+    T extends { turnId: string | null; createdAt: string; updatedAt?: string },
+  >(
+    entries: ReadonlyArray<T>,
+    cutoffAt: string | null,
+  ): T[] =>
+    entries.filter((entry) => {
+      if (entry.turnId !== null) {
+        return retainedTurnIds.has(entry.turnId);
+      }
+      return cutoffAt !== null && getEntryTimestamp(entry) <= cutoffAt;
+    });
+
+  let retainedTurnIds = new Set<string>();
+  let cutoffAt: string | null = null;
+
+  if (forkSource.kind === "latest") {
+    retainedTurnIds = new Set(orderedCheckpoints.map((checkpoint) => checkpoint.turnId));
+    cutoffAt = null;
+  } else if (forkSource.kind === "message") {
+    const messageIndex = orderedMessages.findIndex(
+      (message) => message.id === forkSource.messageId,
+    );
+    if (messageIndex < 0) {
+      return Effect.fail(
+        new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.sourceThreadId}' does not contain message '${forkSource.messageId}'.`,
+        }),
+      );
+    }
+
+    const retainedMessages = orderedMessages.slice(0, messageIndex + 1);
+    const boundaryMessage = retainedMessages.at(-1) ?? null;
+    const boundaryTurnId = boundaryMessage?.turnId ?? null;
+    retainedTurnIds = new Set(
+      retainedMessages.flatMap((message) => (message.turnId === null ? [] : [message.turnId])),
+    );
+    cutoffAt = boundaryMessage ? getEntryTimestamp(boundaryMessage) : null;
+
+    return Effect.succeed({
+      messages: retainedMessages,
+      proposedPlans: orderedProposedPlans.filter((plan) =>
+        shouldRetainMessageForkEntry({
+          entryTurnId: plan.turnId,
+          entryTimestamp: getEntryTimestamp(plan),
+          retainedTurnIds,
+          cutoffAt,
+          boundaryTurnId,
+        }),
+      ),
+      checkpoints: orderedCheckpoints.filter((checkpoint) =>
+        shouldRetainMessageForkEntry({
+          entryTurnId: checkpoint.turnId,
+          entryTimestamp: checkpoint.completedAt,
+          retainedTurnIds,
+          cutoffAt,
+          boundaryTurnId,
+        }),
+      ),
+      activities: orderedActivities
+        .filter((activity) =>
+          shouldRetainMessageForkEntry({
+            entryTurnId: activity.turnId,
+            entryTimestamp: getEntryTimestamp(activity),
+            retainedTurnIds,
+            cutoffAt,
+            boundaryTurnId,
+          }),
+        )
+        .filter(shouldCopyForkActivity),
+    });
+  } else {
+    const latestCheckpointTurnCount = orderedCheckpoints.at(-1)?.checkpointTurnCount ?? 0;
+    if (forkSource.turnCount > latestCheckpointTurnCount) {
+      return Effect.fail(
+        new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.sourceThreadId}' does not have checkpoint turn ${forkSource.turnCount}.`,
+        }),
+      );
+    }
+    if (
+      forkSource.turnCount > 0 &&
+      !orderedCheckpoints.some(
+        (checkpoint) => checkpoint.checkpointTurnCount === forkSource.turnCount,
+      )
+    ) {
+      return Effect.fail(
+        new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Thread '${command.sourceThreadId}' is missing checkpoint turn ${forkSource.turnCount}.`,
+        }),
+      );
+    }
+
+    const retainedCheckpoints = orderedCheckpoints.filter(
+      (checkpoint) => checkpoint.checkpointTurnCount <= forkSource.turnCount,
+    );
+    retainedTurnIds = new Set(retainedCheckpoints.map((checkpoint) => checkpoint.turnId));
+    cutoffAt = retainedCheckpoints.at(-1)?.completedAt ?? null;
+
+    return Effect.succeed({
+      messages: retainForkMessagesAfterTurnCount(
+        orderedMessages,
+        retainedTurnIds,
+        forkSource.turnCount,
+      ),
+      proposedPlans: retainTimestampScopedEntries(orderedProposedPlans, cutoffAt),
+      checkpoints: retainedCheckpoints,
+      activities: retainTimestampScopedEntries(orderedActivities, cutoffAt).filter(
+        shouldCopyForkActivity,
+      ),
+    });
+  }
+
+  return Effect.succeed({
+    messages: orderedMessages,
+    proposedPlans: orderedProposedPlans,
+    checkpoints: orderedCheckpoints,
+    activities: orderedActivities.filter(shouldCopyForkActivity),
+  });
 }
 
 export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand")(function* ({
@@ -187,6 +472,110 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: command.createdAt,
         },
       };
+    }
+
+    case "thread.fork": {
+      const sourceThread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.sourceThreadId,
+      });
+      yield* requireThreadAbsent({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const forkSnapshot = yield* buildForkSnapshot({ command, sourceThread });
+
+      const events: Array<Omit<OrchestrationEvent, "sequence">> = [];
+      const copiedMessageIds = new Map<string, OrchestrationThread["messages"][number]["id"]>();
+
+      const appendForkEvent = <TType extends OrchestrationEvent["type"]>(
+        type: TType,
+        payload: Extract<OrchestrationEvent, { type: TType }>["payload"],
+      ) => {
+        const previousEvent = events.at(-1) ?? null;
+        const nextEvent = {
+          ...withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+          }),
+          causationEventId: previousEvent?.eventId ?? null,
+          type,
+          payload,
+        } as Omit<OrchestrationEvent, "sequence">;
+        events.push(nextEvent);
+        return nextEvent;
+      };
+
+      appendForkEvent("thread.created", {
+        threadId: command.threadId,
+        projectId: sourceThread.projectId,
+        title: command.title,
+        model: command.model,
+        runtimeMode: command.runtimeMode,
+        interactionMode: command.interactionMode,
+        branch: command.branch,
+        worktreePath: command.worktreePath,
+        createdAt: command.createdAt,
+        updatedAt: command.createdAt,
+      });
+
+      for (const message of forkSnapshot.messages) {
+        const nextMessageId = crypto.randomUUID() as OrchestrationThread["messages"][number]["id"];
+        copiedMessageIds.set(message.id, nextMessageId);
+        appendForkEvent("thread.message-sent", {
+          threadId: command.threadId,
+          messageId: nextMessageId,
+          role: message.role,
+          text: message.text,
+          ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
+          turnId: message.turnId,
+          streaming: message.streaming,
+          createdAt: message.createdAt,
+          updatedAt: message.updatedAt,
+        });
+      }
+
+      for (const proposedPlan of forkSnapshot.proposedPlans) {
+        appendForkEvent("thread.proposed-plan-upserted", {
+          threadId: command.threadId,
+          proposedPlan: {
+            ...proposedPlan,
+            id: crypto.randomUUID() as OrchestrationThread["proposedPlans"][number]["id"],
+          },
+        });
+      }
+
+      for (const checkpoint of forkSnapshot.checkpoints) {
+        appendForkEvent("thread.turn-diff-completed", {
+          threadId: command.threadId,
+          turnId: checkpoint.turnId,
+          checkpointTurnCount: checkpoint.checkpointTurnCount,
+          checkpointRef: checkpoint.checkpointRef,
+          status: checkpoint.status,
+          files: checkpoint.files,
+          assistantMessageId:
+            checkpoint.assistantMessageId !== null
+              ? (copiedMessageIds.get(checkpoint.assistantMessageId) ?? null)
+              : null,
+          completedAt: checkpoint.completedAt,
+        });
+      }
+
+      for (const activity of forkSnapshot.activities) {
+        appendForkEvent("thread.activity-appended", {
+          threadId: command.threadId,
+          activity: {
+            ...activity,
+            id: crypto.randomUUID() as OrchestrationThread["activities"][number]["id"],
+          },
+        });
+      }
+
+      return events;
     }
 
     case "thread.delete": {

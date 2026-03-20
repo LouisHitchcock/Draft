@@ -43,6 +43,19 @@ function formatAuthStatus(authStatus: ServerMcpServerAuthStatus): string | null 
   }
 }
 
+function formatConnectionStatus(
+  connectionStatus: ServerMcpServerStatus["connectionStatus"],
+): string | null {
+  switch (connectionStatus) {
+    case "connected":
+      return "Connected";
+    case "failed":
+      return "Failed";
+    default:
+      return null;
+  }
+}
+
 function formatCapabilities(server: ServerMcpServerStatus): string | null {
   if (server.toolCount > 0) {
     return server.toolCount === 1 ? "1 tool" : `${server.toolCount} tools`;
@@ -65,9 +78,13 @@ export function formatMcpServerDescription(server: ServerMcpServerStatus): strin
 
   const parts = ["Enabled"];
   const authStatus = formatAuthStatus(server.authStatus);
+  const connectionStatus = formatConnectionStatus(server.connectionStatus);
   const capabilities = formatCapabilities(server);
   if (authStatus) {
     parts.push(authStatus);
+  }
+  if (connectionStatus) {
+    parts.push(connectionStatus);
   }
   if (capabilities) {
     parts.push(capabilities);
@@ -96,7 +113,10 @@ export function buildComposerMcpServerItems(input: {
       return (
         server.name.toLowerCase().includes(query) ||
         server.state.toLowerCase().includes(query) ||
-        authLabel.includes(query)
+        authLabel.includes(query) ||
+        (server.connectionStatus?.toLowerCase().includes(query) ?? false) ||
+        (server.message?.toLowerCase().includes(query) ?? false) ||
+        (server.target?.toLowerCase().includes(query) ?? false)
       );
     })
     .map((server) => ({

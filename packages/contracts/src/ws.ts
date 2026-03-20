@@ -48,6 +48,12 @@ import {
 } from "./terminal";
 import { KeybindingRule } from "./keybindings";
 import {
+  ProjectAgentsFileInput,
+  ProjectAgentsFileResult,
+  ProjectDraftAgentsFileInput,
+  ProjectDraftAgentsFileResult,
+  ProjectListCommandTemplatesInput,
+  ProjectListCommandTemplatesResult,
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
   ProjectWriteFileInput,
@@ -76,6 +82,9 @@ export const WS_METHODS = {
   projectsAdd: "projects.add",
   projectsRemove: "projects.remove",
   projectsSearchEntries: "projects.searchEntries",
+  projectsReadAgentsFile: "projects.readAgentsFile",
+  projectsDraftAgentsFile: "projects.draftAgentsFile",
+  projectsListCommandTemplates: "projects.listCommandTemplates",
   projectsWriteFile: "projects.writeFile",
 
   // Shell methods
@@ -145,6 +154,9 @@ const WebSocketRequestBody = Schema.Union([
 
   // Project Search
   tagRequestBody(WS_METHODS.projectsSearchEntries, ProjectSearchEntriesInput),
+  tagRequestBody(WS_METHODS.projectsReadAgentsFile, ProjectAgentsFileInput),
+  tagRequestBody(WS_METHODS.projectsDraftAgentsFile, ProjectDraftAgentsFileInput),
+  tagRequestBody(WS_METHODS.projectsListCommandTemplates, ProjectListCommandTemplatesInput),
   tagRequestBody(WS_METHODS.projectsWriteFile, ProjectWriteFileInput),
 
   // Shell methods
@@ -279,6 +291,9 @@ export const WsRpcResultSchemaByMethod = {
   [ORCHESTRATION_WS_METHODS.getFullThreadDiff]: OrchestrationGetFullThreadDiffResult,
   [ORCHESTRATION_WS_METHODS.replayEvents]: OrchestrationReplayEventsResult,
   [WS_METHODS.projectsSearchEntries]: ProjectSearchEntriesResult,
+  [WS_METHODS.projectsReadAgentsFile]: ProjectAgentsFileResult,
+  [WS_METHODS.projectsDraftAgentsFile]: ProjectDraftAgentsFileResult,
+  [WS_METHODS.projectsListCommandTemplates]: ProjectListCommandTemplatesResult,
   [WS_METHODS.projectsWriteFile]: ProjectWriteFileResult,
   [WS_METHODS.shellOpenInEditor]: Schema.Void,
   [WS_METHODS.gitPull]: GitPullResult,

@@ -1,7 +1,12 @@
 import { splitPromptIntoComposerSegments } from "./composer-editor-mentions";
 
 export type ComposerTriggerKind = "path" | "slash-command" | "slash-model" | "slash-mcp";
-export type ComposerSlashCommand = "model" | "mcp" | "plan" | "default";
+export type ComposerSlashCommand = "model" | "mcp" | "plan" | "default" | "init";
+
+export interface ComposerSlashInvocation {
+  command: string;
+  argumentsText: string;
+}
 
 export interface ComposerTrigger {
   kind: ComposerTriggerKind;
@@ -9,8 +14,6 @@ export interface ComposerTrigger {
   rangeStart: number;
   rangeEnd: number;
 }
-
-const SLASH_COMMANDS: readonly ComposerSlashCommand[] = ["model", "mcp", "plan", "default"];
 
 function clampCursor(text: string, cursor: number): number {
   if (!Number.isFinite(cursor)) return text.length;
@@ -176,15 +179,12 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
           rangeEnd: cursor,
         };
       }
-      if (SLASH_COMMANDS.some((command) => command.startsWith(commandQuery.toLowerCase()))) {
-        return {
-          kind: "slash-command",
-          query: commandQuery,
-          rangeStart: lineStart,
-          rangeEnd: cursor,
-        };
-      }
-      return null;
+      return {
+        kind: "slash-command",
+        query: commandQuery,
+        rangeStart: lineStart,
+        rangeEnd: cursor,
+      };
     }
 
     const modelMatch = /^\/model(?:\s+(.*))?$/.exec(linePrefix);
@@ -225,13 +225,31 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
 export function parseStandaloneComposerSlashCommand(
   text: string,
 ): Exclude<ComposerSlashCommand, "model" | "mcp"> | null {
-  const match = /^\/(plan|default)\s*$/i.exec(text.trim());
+  const match = /^\/(plan|default|init)\s*$/i.exec(text.trim());
   if (!match) {
     return null;
   }
   const command = match[1]?.toLowerCase();
   if (command === "plan") return "plan";
+  if (command === "init") return "init";
   return "default";
+}
+
+export function parseStandaloneComposerSlashInvocation(
+  text: string,
+): ComposerSlashInvocation | null {
+  const match = /^\/([a-z0-9][a-z0-9_-]*)(?:\s+(.*))?$/i.exec(text.trim());
+  if (!match) {
+    return null;
+  }
+  const command = match[1]?.trim().toLowerCase();
+  if (!command || command === "model" || command === "mcp") {
+    return null;
+  }
+  return {
+    command,
+    argumentsText: (match[2] ?? "").trim(),
+  };
 }
 
 export function replaceTextRange(

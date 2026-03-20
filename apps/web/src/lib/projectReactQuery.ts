@@ -1,9 +1,15 @@
-import type { ProjectSearchEntriesResult } from "@t3tools/contracts";
+import type {
+  ProjectAgentsFileResult,
+  ProjectListCommandTemplatesResult,
+  ProjectSearchEntriesResult,
+} from "@t3tools/contracts";
 import { queryOptions } from "@tanstack/react-query";
 import { ensureNativeApi } from "~/nativeApi";
 
 export const projectQueryKeys = {
   all: ["projects"] as const,
+  agentsFile: (cwd: string | null) => ["projects", "agents-file", cwd] as const,
+  commandTemplates: (cwd: string | null) => ["projects", "command-templates", cwd] as const,
   searchEntries: (cwd: string | null, query: string, limit: number) =>
     ["projects", "search-entries", cwd, query, limit] as const,
 };
@@ -14,6 +20,19 @@ const EMPTY_SEARCH_ENTRIES_RESULT: ProjectSearchEntriesResult = {
   entries: [],
   truncated: false,
 };
+const EMPTY_COMMAND_TEMPLATES_RESULT: ProjectListCommandTemplatesResult = {
+  commands: [],
+  issues: [],
+};
+
+function buildMissingAgentsFileResult(cwd: string): ProjectAgentsFileResult {
+  return {
+    status: "missing",
+    cwd,
+    relativePath: "AGENTS.md",
+    absolutePath: `${cwd.replace(/\/$/, "")}/AGENTS.md`,
+  };
+}
 
 export function projectSearchEntriesQueryOptions(input: {
   cwd: string | null;
@@ -39,5 +58,48 @@ export function projectSearchEntriesQueryOptions(input: {
     enabled: (input.enabled ?? true) && input.cwd !== null && input.query.length > 0,
     staleTime: input.staleTime ?? DEFAULT_SEARCH_ENTRIES_STALE_TIME,
     placeholderData: (previous) => previous ?? EMPTY_SEARCH_ENTRIES_RESULT,
+  });
+}
+
+export function projectAgentsFileQueryOptions(input: {
+  cwd: string | null;
+  enabled?: boolean;
+  includeContents?: boolean;
+}) {
+  return queryOptions({
+    queryKey: projectQueryKeys.agentsFile(input.cwd),
+    queryFn: async () => {
+      if (!input.cwd) {
+        throw new Error("Workspace AGENTS.md lookup is unavailable.");
+      }
+      const api = ensureNativeApi();
+      return api.projects.readAgentsFile({
+        cwd: input.cwd,
+        ...(input.includeContents !== undefined ? { includeContents: input.includeContents } : {}),
+      });
+    },
+    enabled: (input.enabled ?? true) && input.cwd !== null,
+    staleTime: 30_000,
+    placeholderData: (previous) =>
+      previous ?? (input.cwd ? buildMissingAgentsFileResult(input.cwd) : undefined),
+  });
+}
+
+export function projectCommandTemplatesQueryOptions(input: {
+  cwd: string | null;
+  enabled?: boolean;
+}) {
+  return queryOptions({
+    queryKey: projectQueryKeys.commandTemplates(input.cwd),
+    queryFn: async () => {
+      if (!input.cwd) {
+        throw new Error("Workspace command template lookup is unavailable.");
+      }
+      const api = ensureNativeApi();
+      return api.projects.listCommandTemplates({ cwd: input.cwd });
+    },
+    enabled: (input.enabled ?? true) && input.cwd !== null,
+    staleTime: 30_000,
+    placeholderData: (previous) => previous ?? EMPTY_COMMAND_TEMPLATES_RESULT,
   });
 }

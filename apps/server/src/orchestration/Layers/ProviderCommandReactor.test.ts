@@ -87,12 +87,15 @@ describe("ProviderCommandReactor", () => {
 
   async function createHarness(input?: {
     readonly stateDir?: string;
+    readonly workspaceRoot?: string;
     readonly capabilitiesByProvider?: Partial<
       Record<ProviderSession["provider"], "in-session" | "restart-session" | "unsupported">
     >;
   }) {
     const now = new Date().toISOString();
     const stateDir = input?.stateDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "cut3-reactor-"));
+    const workspaceRoot = input?.workspaceRoot ?? "/tmp/provider-project";
+    fs.mkdirSync(workspaceRoot, { recursive: true });
     createdStateDirs.add(stateDir);
     const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
     let nextSessionIndex = 1;
@@ -237,7 +240,7 @@ describe("ProviderCommandReactor", () => {
         commandId: CommandId.makeUnsafe("cmd-project-create"),
         projectId: asProjectId("project-1"),
         title: "Provider Project",
-        workspaceRoot: "/tmp/provider-project",
+        workspaceRoot,
         defaultModel: "gpt-5-codex",
         createdAt: now,
       }),
@@ -269,6 +272,7 @@ describe("ProviderCommandReactor", () => {
       renameBranch,
       generateBranchName,
       stateDir,
+      workspaceRoot,
       drain,
     };
   }
@@ -307,6 +311,45 @@ describe("ProviderCommandReactor", () => {
     const thread = readModel.threads.find((entry) => entry.id === ThreadId.makeUnsafe("thread-1"));
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
+  });
+
+  it("injects workspace AGENTS.md instructions into provider turn input", async () => {
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cut3-reactor-workspace-"));
+    fs.writeFileSync(
+      path.join(workspaceRoot, "AGENTS.md"),
+      ["# AGENTS.md", "", "Always mention the release checklist."].join("\n"),
+      "utf8",
+    );
+    const harness = await createHarness({ workspaceRoot });
+    const now = new Date().toISOString();
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.makeUnsafe("cmd-turn-start-agents"),
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-agents"),
+          role: "user",
+          text: "Ship the patch",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    const sendTurnInput = harness.sendTurn.mock.calls[0]?.[0] as { input?: string } | undefined;
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
+      threadId: ThreadId.makeUnsafe("thread-1"),
+    });
+    expect(harness.sendTurn.mock.calls[0]?.[0]).toHaveProperty("input");
+    expect(String(sendTurnInput?.input)).toContain('<workspace_instructions source="AGENTS.md">');
+    expect(String(sendTurnInput?.input)).toContain("Always mention the release checklist.");
+    expect(String(sendTurnInput?.input)).toContain("<user_request>");
+    expect(String(sendTurnInput?.input)).toContain("Ship the patch");
   });
 
   it("forwards codex model options through session start and turn send", async () => {

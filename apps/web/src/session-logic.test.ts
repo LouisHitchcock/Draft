@@ -12,6 +12,7 @@ import {
   PROVIDER_OPTIONS,
   derivePendingApprovals,
   derivePendingUserInputs,
+  deriveThreadTasks,
   deriveTimelineEntries,
   deriveWorkLogEntries,
   findLatestProposedPlan,
@@ -740,6 +741,127 @@ describe("deriveWorkLogEntries", () => {
     expect(entry?.changedFiles).toEqual([
       "apps/web/src/components/ChatView.tsx",
       "apps/web/src/session-logic.ts",
+    ]);
+  });
+});
+
+describe("deriveThreadTasks", () => {
+  it("builds running and completed task state from lifecycle events", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "task-start",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        kind: "task.started",
+        summary: "Plan task started",
+        tone: "info",
+        turnId: "turn-2",
+        payload: {
+          taskId: "task-1",
+          taskType: "plan",
+          detail: "Map the next implementation steps",
+        },
+      }),
+      makeActivity({
+        id: "task-progress",
+        createdAt: "2026-02-23T00:00:02.000Z",
+        kind: "task.progress",
+        summary: "Reasoning update",
+        tone: "info",
+        turnId: "turn-2",
+        payload: {
+          taskId: "task-1",
+          detail: "Inspecting orchestration history",
+          lastToolName: "read_file",
+        },
+      }),
+      makeActivity({
+        id: "task-complete",
+        createdAt: "2026-02-23T00:00:03.000Z",
+        kind: "task.completed",
+        summary: "Task completed",
+        tone: "info",
+        turnId: "turn-2",
+        payload: {
+          taskId: "task-1",
+          status: "completed",
+          detail: "Mapped the remaining implementation plan",
+        },
+      }),
+      makeActivity({
+        id: "task-running-start",
+        createdAt: "2026-02-23T00:00:04.000Z",
+        kind: "task.started",
+        summary: "Task started",
+        tone: "info",
+        turnId: "turn-3",
+        payload: {
+          taskId: "task-2",
+          taskType: "review",
+        },
+      }),
+    ];
+
+    expect(deriveThreadTasks(activities)).toEqual([
+      {
+        taskId: "task-2",
+        turnId: "turn-3",
+        taskType: "review",
+        title: "review task",
+        status: "running",
+        startedAt: "2026-02-23T00:00:04.000Z",
+        progressUpdates: [],
+      },
+      {
+        taskId: "task-1",
+        turnId: "turn-2",
+        taskType: "plan",
+        title: "Plan task",
+        status: "completed",
+        startedAt: "2026-02-23T00:00:01.000Z",
+        completedAt: "2026-02-23T00:00:03.000Z",
+        summary: "Mapped the remaining implementation plan",
+        progressUpdates: [
+          {
+            id: "task-progress",
+            createdAt: "2026-02-23T00:00:02.000Z",
+            description: "Inspecting orchestration history",
+            lastToolName: "read_file",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("creates a fallback running task when progress arrives before the start event", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "task-progress-only",
+        createdAt: "2026-02-23T00:00:02.000Z",
+        kind: "task.progress",
+        summary: "Reasoning update",
+        tone: "info",
+        payload: {
+          taskId: "task-1",
+          detail: "Looking through the relevant files",
+        },
+      }),
+    ];
+
+    expect(deriveThreadTasks(activities)).toEqual([
+      {
+        taskId: "task-1",
+        turnId: null,
+        title: "Reasoning update",
+        status: "running",
+        startedAt: "2026-02-23T00:00:02.000Z",
+        progressUpdates: [
+          {
+            id: "task-progress-only",
+            createdAt: "2026-02-23T00:00:02.000Z",
+            description: "Looking through the relevant files",
+          },
+        ],
+      },
     ]);
   });
 });

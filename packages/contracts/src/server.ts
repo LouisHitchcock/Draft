@@ -79,31 +79,6 @@ export const ServerOpenCodeStateInput = Schema.Struct({
 });
 export type ServerOpenCodeStateInput = typeof ServerOpenCodeStateInput.Type;
 
-const ServerOpenCodeStateAvailable = Schema.Struct({
-  status: Schema.Literal("available"),
-  fetchedAt: IsoDateTime,
-  checkedCwd: TrimmedNonEmptyString,
-  binaryPath: TrimmedNonEmptyString,
-  credentials: ServerOpenCodeCredentials,
-  models: ServerOpenCodeModels,
-  message: Schema.optional(TrimmedNonEmptyString),
-});
-
-const ServerOpenCodeStateUnavailable = Schema.Struct({
-  status: Schema.Literal("unavailable"),
-  fetchedAt: IsoDateTime,
-  checkedCwd: TrimmedNonEmptyString,
-  binaryPath: TrimmedNonEmptyString,
-  credentials: ServerOpenCodeCredentials,
-  models: ServerOpenCodeModels,
-  message: TrimmedNonEmptyString,
-});
-
-export const ServerOpenCodeState = Schema.Union([
-  ServerOpenCodeStateAvailable,
-  ServerOpenCodeStateUnavailable,
-]);
-export type ServerOpenCodeState = typeof ServerOpenCodeState.Type;
 export const ServerMcpServerStatusState = Schema.Literals(["enabled", "disabled"]);
 export type ServerMcpServerStatusState = typeof ServerMcpServerStatusState.Type;
 
@@ -116,6 +91,9 @@ export const ServerMcpServerAuthStatus = Schema.Literals([
 ]);
 export type ServerMcpServerAuthStatus = typeof ServerMcpServerAuthStatus.Type;
 
+export const ServerMcpServerConnectionStatus = Schema.Literals(["connected", "failed", "unknown"]);
+export type ServerMcpServerConnectionStatus = typeof ServerMcpServerConnectionStatus.Type;
+
 export const ServerMcpServerStatus = Schema.Struct({
   name: TrimmedNonEmptyString,
   enabled: Schema.Boolean,
@@ -124,13 +102,69 @@ export const ServerMcpServerStatus = Schema.Struct({
   toolCount: NonNegativeNumber,
   resourceCount: NonNegativeNumber,
   resourceTemplateCount: NonNegativeNumber,
+  connectionStatus: Schema.optional(ServerMcpServerConnectionStatus),
+  target: Schema.optional(TrimmedNonEmptyString),
+  message: Schema.optional(TrimmedNonEmptyString),
 });
 export type ServerMcpServerStatus = typeof ServerMcpServerStatus.Type;
+
+const ServerMcpServers = Schema.Array(ServerMcpServerStatus);
+
+export const ServerOpenCodeConfigSourceKind = Schema.Literals([
+  "global-config",
+  "custom-config",
+  "project-config",
+  "global-directory",
+  "custom-directory",
+  "project-directory",
+]);
+export type ServerOpenCodeConfigSourceKind = typeof ServerOpenCodeConfigSourceKind.Type;
+
+export const ServerOpenCodeConfigSource = Schema.Struct({
+  kind: ServerOpenCodeConfigSourceKind,
+  path: TrimmedNonEmptyString,
+  exists: Schema.Boolean,
+});
+export type ServerOpenCodeConfigSource = typeof ServerOpenCodeConfigSource.Type;
+
+const ServerOpenCodeConfigSources = Schema.Array(ServerOpenCodeConfigSource);
+
+const ServerOpenCodeStateAvailable = Schema.Struct({
+  status: Schema.Literal("available"),
+  fetchedAt: IsoDateTime,
+  checkedCwd: TrimmedNonEmptyString,
+  binaryPath: TrimmedNonEmptyString,
+  credentials: ServerOpenCodeCredentials,
+  models: ServerOpenCodeModels,
+  mcpSupported: Schema.Boolean,
+  mcpServers: ServerMcpServers,
+  configSources: ServerOpenCodeConfigSources,
+  message: Schema.optional(TrimmedNonEmptyString),
+});
+
+const ServerOpenCodeStateUnavailable = Schema.Struct({
+  status: Schema.Literal("unavailable"),
+  fetchedAt: IsoDateTime,
+  checkedCwd: TrimmedNonEmptyString,
+  binaryPath: TrimmedNonEmptyString,
+  credentials: ServerOpenCodeCredentials,
+  models: ServerOpenCodeModels,
+  mcpSupported: Schema.Boolean,
+  mcpServers: ServerMcpServers,
+  configSources: ServerOpenCodeConfigSources,
+  message: TrimmedNonEmptyString,
+});
+
+export const ServerOpenCodeState = Schema.Union([
+  ServerOpenCodeStateAvailable,
+  ServerOpenCodeStateUnavailable,
+]);
+export type ServerOpenCodeState = typeof ServerOpenCodeState.Type;
 
 export const ServerProviderMcpStatus = Schema.Struct({
   provider: ProviderKind,
   supported: Schema.Boolean,
-  servers: Schema.Array(ServerMcpServerStatus),
+  servers: ServerMcpServers,
 });
 export type ServerProviderMcpStatus = typeof ServerProviderMcpStatus.Type;
 

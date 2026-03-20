@@ -1,7 +1,14 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
 import type {
+  ServerMcpServerAuthStatus,
+  ServerMcpServerStatus,
   ServerOpenCodeCredential,
   ServerOpenCodeCredentialAuthType,
   ServerOpenCodeCredentialResult,
+  ServerOpenCodeConfigSource,
   ServerOpenCodeModel,
   ServerOpenCodeState,
   ServerOpenCodeStateInput,
@@ -20,6 +27,27 @@ const MODELS_DEV_API_URL = "https://models.dev/api.json";
 const MODELS_DEV_TIMEOUT_MS = 5_000;
 const MODELS_DEV_CACHE_TTL_MS = 30 * 60 * 1_000;
 const ANSI_ESCAPE_PATTERN = new RegExp(String.raw`\u001B\[[0-9;?]*[ -/]*[@-~]`, "g");
+const DEFAULT_CONFIG_BASENAME = "opencode.json";
+const CONFIG_CANDIDATE_FILENAMES = ["opencode.json", "opencode.jsonc"] as const;
+
+type OpenCodeCliSectionEntry = {
+  readonly header: string;
+  readonly details: ReadonlyArray<string>;
+};
+
+type ParsedOpenCodeMcpListEntry = {
+  readonly name: string;
+  readonly connectionStatus: "connected" | "failed" | "unknown";
+  readonly target?: string;
+  readonly message?: string;
+};
+
+type ParsedOpenCodeMcpAuthEntry = {
+  readonly name: string;
+  readonly authStatus: ServerMcpServerAuthStatus;
+  readonly target?: string;
+  readonly message?: string;
+};
 
 type ModelsDevModelEntry = {
   readonly limit?: {
@@ -45,6 +73,146 @@ const modelsDevCatalogCache: {
 
 function stripAnsi(value: string): string {
   return value.replace(ANSI_ESCAPE_PATTERN, "");
+}
+
+function expandHomePath(value: string): string {
+  if (value === "~") {
+    return os.homedir();
+  }
+  if (value.startsWith("~/")) {
+    return path.join(os.homedir(), value.slice(2));
+  }
+  return value;
+}
+
+function resolveConfigPathCandidate(rawPath: string, cwd: string): string {
+  const expanded = expandHomePath(rawPath.trim());
+  return path.isAbsolute(expanded) ? expanded : path.resolve(cwd, expanded);
+}
+
+async function pathExists(candidatePath: string): Promise<boolean> {
+  try {
+    await fs.stat(candidatePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveFirstExistingPath(
+  candidates: ReadonlyArray<string>,
+): Promise<string | undefined> {
+  for (const candidate of candidates) {
+    if (await pathExists(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+async function resolveNearestProjectConfigPath(cwd: string): Promise<{
+  readonly path: string;
+  readonly exists: boolean;
+}> {
+  let currentDir = path.resolve(cwd);
+
+  while (true) {
+    const existingPath = await resolveFirstExistingPath(
+      CONFIG_CANDIDATE_FILENAMES.map((filename) => path.join(currentDir, filename)),
+    );
+    if (existingPath) {
+      return { path: existingPath, exists: true };
+    }
+
+    if (await pathExists(path.join(currentDir, ".git"))) {
+      return { path: path.join(currentDir, DEFAULT_CONFIG_BASENAME), exists: false };
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      return { path: path.join(currentDir, DEFAULT_CONFIG_BASENAME), exists: false };
+    }
+    currentDir = parentDir;
+  }
+}
+
+async function resolveNearestProjectDirectoryPath(cwd: string): Promise<{
+  readonly path: string;
+  readonly exists: boolean;
+}> {
+  let currentDir = path.resolve(cwd);
+
+  while (true) {
+    const candidate = path.join(currentDir, ".opencode");
+    if (await pathExists(candidate)) {
+      return { path: candidate, exists: true };
+    }
+
+    if (await pathExists(path.join(currentDir, ".git"))) {
+      return { path: candidate, exists: false };
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      return { path: candidate, exists: false };
+    }
+    currentDir = parentDir;
+  }
+}
+
+async function resolveOpenCodeConfigSources(cwd: string): Promise<ServerOpenCodeConfigSource[]> {
+  const checkedCwd = path.resolve(cwd);
+  const globalConfigDir = path.join(os.homedir(), ".config", "opencode");
+  const globalConfigPath =
+    (await resolveFirstExistingPath(
+      CONFIG_CANDIDATE_FILENAMES.map((filename) => path.join(globalConfigDir, filename)),
+    )) ?? path.join(globalConfigDir, DEFAULT_CONFIG_BASENAME);
+  const projectConfigPath = await resolveNearestProjectConfigPath(checkedCwd);
+  const projectDirectoryPath = await resolveNearestProjectDirectoryPath(checkedCwd);
+  const sources: ServerOpenCodeConfigSource[] = [
+    {
+      kind: "global-config",
+      path: globalConfigPath,
+      exists: await pathExists(globalConfigPath),
+    },
+    {
+      kind: "project-config",
+      path: projectConfigPath.path,
+      exists: projectConfigPath.exists,
+    },
+    {
+      kind: "global-directory",
+      path: globalConfigDir,
+      exists: await pathExists(globalConfigDir),
+    },
+    {
+      kind: "project-directory",
+      path: projectDirectoryPath.path,
+      exists: projectDirectoryPath.exists,
+    },
+  ];
+
+  const customConfig = process.env.OPENCODE_CONFIG?.trim();
+  if (customConfig) {
+    const candidate = resolveConfigPathCandidate(customConfig, checkedCwd);
+    sources.splice(1, 0, {
+      kind: "custom-config",
+      path: candidate,
+      exists: await pathExists(candidate),
+    });
+  }
+
+  const customConfigDir = process.env.OPENCODE_CONFIG_DIR?.trim();
+  if (customConfigDir) {
+    const candidate = resolveConfigPathCandidate(customConfigDir, checkedCwd);
+    sources.splice(sources.length - 1, 0, {
+      kind: "custom-directory",
+      path: candidate,
+      exists: await pathExists(candidate),
+    });
+  }
+
+  return sources;
 }
 
 function nonEmptyTrimmed(value: string | undefined): string | undefined {
@@ -161,6 +329,186 @@ export function parseOpenCodeModelsOutput(output: string): ServerOpenCodeModel[]
   return models;
 }
 
+function parseOpenCodeCliSectionEntries(output: string): OpenCodeCliSectionEntry[] {
+  const entries: OpenCodeCliSectionEntry[] = [];
+  let currentEntry: { header: string; details: string[] } | null = null;
+
+  for (const rawLine of stripAnsi(output).split(/\r?\n/g)) {
+    const trimmed = rawLine.trim();
+    if (!trimmed || trimmed.startsWith("┌") || trimmed.startsWith("└") || trimmed === "│") {
+      continue;
+    }
+
+    if (trimmed.startsWith("●")) {
+      if (currentEntry) {
+        entries.push(currentEntry);
+      }
+      currentEntry = { header: trimmed, details: [] };
+      continue;
+    }
+
+    if (!currentEntry) {
+      continue;
+    }
+
+    const detail = trimmed.replace(/^│\s*/, "").trim();
+    if (!detail) {
+      continue;
+    }
+    currentEntry.details.push(detail);
+  }
+
+  if (currentEntry) {
+    entries.push(currentEntry);
+  }
+
+  return entries;
+}
+
+function extractOpenCodeCliEntryDetails(input: {
+  readonly details: ReadonlyArray<string>;
+  readonly connectionStatus: "connected" | "failed" | "unknown";
+  readonly preferSingleDetailAsTarget?: boolean;
+}): {
+  readonly target?: string;
+  readonly message?: string;
+} {
+  const details = input.details
+    .map((detail) => detail.trim())
+    .filter((detail) => detail.length > 0);
+  if (details.length === 0) {
+    return {};
+  }
+
+  if (details.length === 1) {
+    if (input.connectionStatus === "connected" || input.preferSingleDetailAsTarget === true) {
+      const target = details[0];
+      return target ? { target } : {};
+    }
+    const message = details[0];
+    return message ? { message } : {};
+  }
+
+  const message = details.slice(0, -1).join(" ");
+  const target = details[details.length - 1];
+  return {
+    ...(message ? { message } : {}),
+    ...(target ? { target } : {}),
+  };
+}
+
+export function parseOpenCodeMcpListOutput(output: string): ParsedOpenCodeMcpListEntry[] {
+  const entries: ParsedOpenCodeMcpListEntry[] = [];
+
+  for (const entry of parseOpenCodeCliSectionEntries(output)) {
+    const match = entry.header.match(/^●\s+[✓✗]\s+(.+?)\s+(connected|failed)$/i);
+    if (!match) {
+      continue;
+    }
+
+    const name = match[1]?.trim();
+    const statusLabel = match[2]?.trim().toLowerCase();
+    if (!name || !statusLabel) {
+      continue;
+    }
+
+    const connectionStatus =
+      statusLabel === "connected" ? "connected" : statusLabel === "failed" ? "failed" : "unknown";
+    const details = extractOpenCodeCliEntryDetails({
+      details: entry.details,
+      connectionStatus,
+    });
+    entries.push({
+      name,
+      connectionStatus,
+      ...(details.target ? { target: details.target } : {}),
+      ...(details.message ? { message: details.message } : {}),
+    });
+  }
+
+  return entries;
+}
+
+export function parseOpenCodeMcpAuthListOutput(output: string): ParsedOpenCodeMcpAuthEntry[] {
+  const entries: ParsedOpenCodeMcpAuthEntry[] = [];
+
+  for (const entry of parseOpenCodeCliSectionEntries(output)) {
+    const match = entry.header.match(/^●\s+[✓✗]\s+(.+?)\s+(authenticated|not authenticated)$/i);
+    if (!match) {
+      continue;
+    }
+
+    const name = match[1]?.trim();
+    const authState = match[2]?.trim().toLowerCase();
+    if (!name || !authState) {
+      continue;
+    }
+
+    const details = extractOpenCodeCliEntryDetails({
+      details: entry.details,
+      connectionStatus: "unknown",
+      preferSingleDetailAsTarget: true,
+    });
+    entries.push({
+      name,
+      authStatus: authState === "authenticated" ? "o_auth" : "not_logged_in",
+      ...(details.target ? { target: details.target } : {}),
+      ...(details.message ? { message: details.message } : {}),
+    });
+  }
+
+  return entries;
+}
+
+export function mergeOpenCodeMcpServerStatuses(input: {
+  readonly runtimeServers: ReadonlyArray<ParsedOpenCodeMcpListEntry>;
+  readonly authServers: ReadonlyArray<ParsedOpenCodeMcpAuthEntry>;
+}): ServerMcpServerStatus[] {
+  const merged = new Map<string, ServerMcpServerStatus>();
+
+  for (const runtimeServer of input.runtimeServers) {
+    merged.set(runtimeServer.name, {
+      name: runtimeServer.name,
+      enabled: true,
+      state: "enabled",
+      authStatus: "unsupported",
+      toolCount: 0,
+      resourceCount: 0,
+      resourceTemplateCount: 0,
+      connectionStatus: runtimeServer.connectionStatus,
+      ...(runtimeServer.target ? { target: runtimeServer.target } : {}),
+      ...(runtimeServer.message ? { message: runtimeServer.message } : {}),
+    });
+  }
+
+  for (const authServer of input.authServers) {
+    const existing = merged.get(authServer.name);
+    if (existing) {
+      merged.set(authServer.name, {
+        ...existing,
+        authStatus: authServer.authStatus,
+        ...(!existing.target && authServer.target ? { target: authServer.target } : {}),
+      });
+      continue;
+    }
+
+    merged.set(authServer.name, {
+      name: authServer.name,
+      enabled: true,
+      state: "enabled",
+      authStatus: authServer.authStatus,
+      toolCount: 0,
+      resourceCount: 0,
+      resourceTemplateCount: 0,
+      connectionStatus: "unknown",
+      ...(authServer.target ? { target: authServer.target } : {}),
+      ...(authServer.message ? { message: authServer.message } : {}),
+    });
+  }
+
+  return [...merged.values()].toSorted((left, right) => left.name.localeCompare(right.name));
+}
+
 function readModelsDevContextWindowTokens(
   catalog: ModelsDevCatalog | null | undefined,
   model: Pick<ServerOpenCodeModel, "providerId" | "modelId">,
@@ -243,6 +591,7 @@ function unavailableState(input: {
   readonly fetchedAt: string;
   readonly checkedCwd: string;
   readonly binaryPath: string;
+  readonly configSources: ReadonlyArray<ServerOpenCodeConfigSource>;
   readonly message: string;
 }): ServerOpenCodeState {
   return {
@@ -252,6 +601,9 @@ function unavailableState(input: {
     binaryPath: input.binaryPath,
     credentials: [],
     models: [],
+    mcpSupported: false,
+    mcpServers: [],
+    configSources: [...input.configSources],
     message: input.message,
   } satisfies ServerOpenCodeState;
 }
@@ -306,6 +658,7 @@ async function readOpenCodeState(
   const binaryPath = rawInput?.binaryPath?.trim() || DEFAULT_BINARY_PATH;
   const checkedCwd = rawInput?.cwd?.trim() || process.cwd();
   const refreshModels = rawInput?.refreshModels === true;
+  const configSources = await resolveOpenCodeConfigSources(checkedCwd);
 
   let versionResult: ProcessRunResult;
   try {
@@ -320,6 +673,7 @@ async function readOpenCodeState(
       fetchedAt,
       checkedCwd,
       binaryPath,
+      configSources,
       message: availabilityMessage(binaryPath, error),
     });
   }
@@ -329,6 +683,7 @@ async function readOpenCodeState(
       fetchedAt,
       checkedCwd,
       binaryPath,
+      configSources,
       message: "OpenCode CLI is installed but failed to run. Timed out while running command.",
     });
   }
@@ -338,13 +693,14 @@ async function readOpenCodeState(
       fetchedAt,
       checkedCwd,
       binaryPath,
+      configSources,
       message: detailFromResult(versionResult)
         ? `OpenCode CLI is installed but failed to run. ${detailFromResult(versionResult)}`
         : "OpenCode CLI is installed but failed to run.",
     });
   }
 
-  const [authProbe, modelsProbe, modelsDevCatalog] = await Promise.all([
+  const [authProbe, modelsProbe, mcpListProbe, mcpAuthProbe, modelsDevCatalog] = await Promise.all([
     runCliCommand({
       command: binaryPath,
       args: ["auth", "list"],
@@ -375,6 +731,36 @@ async function readOpenCodeState(
           timedOut: false,
         }) satisfies ProcessRunResult,
     ),
+    runCliCommand({
+      command: binaryPath,
+      args: ["mcp", "list"],
+      cwd: checkedCwd,
+      timeoutMs: DEFAULT_COMMAND_TIMEOUT_MS,
+    }).catch(
+      (error) =>
+        ({
+          stdout: "",
+          stderr: availabilityMessage(binaryPath, error),
+          code: 1,
+          signal: null,
+          timedOut: false,
+        }) satisfies ProcessRunResult,
+    ),
+    runCliCommand({
+      command: binaryPath,
+      args: ["mcp", "auth", "list"],
+      cwd: checkedCwd,
+      timeoutMs: DEFAULT_COMMAND_TIMEOUT_MS,
+    }).catch(
+      (error) =>
+        ({
+          stdout: "",
+          stderr: availabilityMessage(binaryPath, error),
+          code: 1,
+          signal: null,
+          timedOut: false,
+        }) satisfies ProcessRunResult,
+    ),
     loadModelsDevCatalog(),
   ]);
 
@@ -390,8 +776,26 @@ async function readOpenCodeState(
     result: modelsProbe,
     parse: parseOpenCodeModelsOutput,
   });
+  const mcpListResult = handleCommandResult({
+    label: "OpenCode MCP server list",
+    binaryPath,
+    result: mcpListProbe,
+    parse: parseOpenCodeMcpListOutput,
+  });
+  const mcpAuthResult = handleCommandResult({
+    label: "OpenCode MCP OAuth status",
+    binaryPath,
+    result: mcpAuthProbe,
+    parse: parseOpenCodeMcpAuthListOutput,
+  });
+  const mcpSupported = mcpListResult.message === undefined;
 
-  const messages = [authResult.message, modelsResult.message].filter(
+  const messages = [
+    authResult.message,
+    modelsResult.message,
+    mcpListResult.message,
+    mcpAuthResult.message,
+  ].filter(
     (message): message is string => typeof message === "string" && message.trim().length > 0,
   );
 
@@ -402,6 +806,14 @@ async function readOpenCodeState(
     binaryPath,
     credentials: [...authResult.items],
     models: applyModelsDevContextWindows([...modelsResult.items], modelsDevCatalog),
+    mcpSupported,
+    mcpServers: mcpSupported
+      ? mergeOpenCodeMcpServerStatuses({
+          runtimeServers: [...mcpListResult.items],
+          authServers: [...mcpAuthResult.items],
+        })
+      : [],
+    configSources,
     ...(messages.length > 0 ? { message: messages.join(" ") } : {}),
   } satisfies ServerOpenCodeState;
 }
@@ -414,7 +826,7 @@ async function addOpenCodeCredential(
 
   return {
     success: false,
-    message: `OpenCode credential setup is interactive in current CLI builds. Run \`${binaryPath} auth login -p ${provider}\` in a terminal and enter the credential there.`,
+    message: `OpenCode credential setup is interactive in current CLI builds. Run \`${binaryPath} auth login --provider ${provider}\` in a terminal and enter the credential there.`,
   };
 }
 

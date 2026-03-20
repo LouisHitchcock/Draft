@@ -34,6 +34,21 @@ describe("formatMcpServerDescription", () => {
       }),
     ).toBe("Disabled in Codex config");
   });
+
+  it("includes connection status when runtime inspection exposes it", () => {
+    expect(
+      formatMcpServerDescription({
+        name: "context7",
+        enabled: true,
+        state: "enabled",
+        authStatus: "not_logged_in",
+        toolCount: 0,
+        resourceCount: 0,
+        resourceTemplateCount: 0,
+        connectionStatus: "connected",
+      }),
+    ).toBe("Enabled · Needs login · Connected");
+  });
 });
 
 describe("buildComposerMcpServerItems", () => {
@@ -77,6 +92,43 @@ describe("buildComposerMcpServerItems", () => {
         state: "enabled",
         authStatus: "o_auth",
         description: "Enabled · OAuth · 3 tools",
+      },
+    ]);
+  });
+
+  it("matches query text against connection diagnostics", () => {
+    const items = buildComposerMcpServerItems({
+      provider: "opencode",
+      query: "sse error",
+      providerMcpStatuses: [
+        {
+          provider: "opencode",
+          supported: true,
+          servers: [
+            {
+              name: "paper",
+              enabled: true,
+              state: "enabled",
+              authStatus: "unsupported",
+              toolCount: 0,
+              resourceCount: 0,
+              resourceTemplateCount: 0,
+              connectionStatus: "failed",
+              message: "SSE error: Unable to connect.",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(items).toEqual([
+      {
+        id: "mcp:opencode:paper",
+        name: "paper",
+        provider: "opencode",
+        state: "enabled",
+        authStatus: "unsupported",
+        description: "Enabled · No auth · Failed",
       },
     ]);
   });

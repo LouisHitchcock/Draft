@@ -15,6 +15,7 @@ import {
   CheckIcon,
   CircleAlertIcon,
   EyeIcon,
+  GitPullRequestIcon,
   GlobeIcon,
   HammerIcon,
   type LucideIcon,
@@ -62,6 +63,8 @@ interface MessagesTimelineProps {
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
+  onForkMessage: (messageId: MessageId) => void;
+  isForkingThread: boolean;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   markdownCwd: string | undefined;
@@ -89,6 +92,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onOpenTurnDiff,
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
+  onForkMessage,
+  isForkingThread,
   isRevertingCheckpoint,
   onImageExpand,
   markdownCwd,
@@ -454,6 +459,16 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                 <div className="mt-1.5 flex items-center justify-end gap-2">
                   <div className="flex items-center gap-1.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
                     {row.message.text && <MessageCopyButton text={row.message.text} />}
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="outline"
+                      disabled={isForkingThread || isWorking || row.message.streaming}
+                      onClick={() => onForkMessage(row.message.id)}
+                      title="Fork thread here"
+                    >
+                      <GitPullRequestIcon className="size-3" />
+                    </Button>
                     {canRevertAgentWork && (
                       <Button
                         type="button"
@@ -559,15 +574,30 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                     </div>
                   );
                 })()}
-                <p className="mt-1.5 text-[10px] text-muted-foreground/30">
-                  {formatMessageMeta(
-                    row.message.createdAt,
-                    row.message.streaming
-                      ? formatElapsed(row.durationStart, nowIso)
-                      : formatElapsed(row.durationStart, row.message.completedAt),
-                    timestampFormat,
-                  )}
-                </p>
+                <div className="mt-1.5 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 hover:opacity-100 group-hover:opacity-100">
+                    {row.message.text && <MessageCopyButton text={row.message.text} />}
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="outline"
+                      disabled={isForkingThread || isWorking || row.message.streaming}
+                      onClick={() => onForkMessage(row.message.id)}
+                      title="Fork thread here"
+                    >
+                      <GitPullRequestIcon className="size-3" />
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/30">
+                    {formatMessageMeta(
+                      row.message.createdAt,
+                      row.message.streaming
+                        ? formatElapsed(row.durationStart, nowIso)
+                        : formatElapsed(row.durationStart, row.message.completedAt),
+                      timestampFormat,
+                    )}
+                  </p>
+                </div>
               </div>
             </>
           );

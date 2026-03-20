@@ -126,6 +126,27 @@ export interface LatestModelRerouteNotice {
   reason: string;
 }
 
+export interface ThreadTaskProgressUpdate {
+  id: string;
+  createdAt: string;
+  description: string;
+  lastToolName?: string;
+  usage?: unknown;
+}
+
+export interface ThreadTask {
+  taskId: string;
+  turnId: TurnId | null;
+  taskType?: string;
+  title: string;
+  status: "running" | "completed" | "failed" | "stopped";
+  startedAt: string;
+  completedAt?: string;
+  summary?: string;
+  usage?: unknown;
+  progressUpdates: ThreadTaskProgressUpdate[];
+}
+
 export type TimelineEntry =
   | {
       id: string;
@@ -575,6 +596,122 @@ export function deriveLatestModelRerouteNotice(
     };
   }
   return null;
+}
+
+function deriveTaskTitle(
+  activity: OrchestrationThreadActivity,
+  payload: Record<string, unknown> | null,
+): string {
+  const taskType = asTrimmedString(payload?.taskType);
+  if (taskType === "plan") {
+    return "Plan task";
+  }
+  if (taskType) {
+    return `${taskType} task`;
+  }
+
+  const normalizedSummary = activity.summary.replace(/\s+started$/i, "").trim();
+  return normalizedSummary.length > 0 ? normalizedSummary : "Task";
+}
+
+function compareThreadTasks(left: ThreadTask, right: ThreadTask): number {
+  const leftIsRunning = left.status === "running";
+  const rightIsRunning = right.status === "running";
+  if (leftIsRunning !== rightIsRunning) {
+    return leftIsRunning ? -1 : 1;
+  }
+
+  const leftUpdatedAt =
+    left.completedAt ?? left.progressUpdates.at(-1)?.createdAt ?? left.startedAt;
+  const rightUpdatedAt =
+    right.completedAt ?? right.progressUpdates.at(-1)?.createdAt ?? right.startedAt;
+  return rightUpdatedAt.localeCompare(leftUpdatedAt) || left.taskId.localeCompare(right.taskId);
+}
+
+export function deriveThreadTasks(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+): ThreadTask[] {
+  const ordered = [...activities].toSorted(compareActivitiesByOrder);
+  const tasksById = new Map<string, ThreadTask>();
+
+  for (const activity of ordered) {
+    if (
+      activity.kind !== "task.started" &&
+      activity.kind !== "task.progress" &&
+      activity.kind !== "task.completed"
+    ) {
+      continue;
+    }
+
+    const payload =
+      activity.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const taskId = asTrimmedString(payload?.taskId);
+    if (!taskId) {
+      continue;
+    }
+
+    const existing = tasksById.get(taskId);
+    const baseTask: ThreadTask = existing ?? {
+      taskId,
+      turnId: activity.turnId,
+      title: deriveTaskTitle(activity, payload),
+      status: "running",
+      startedAt: activity.createdAt,
+      progressUpdates: [],
+    };
+
+    if (activity.kind === "task.started") {
+      const nextTaskType = asTrimmedString(payload?.taskType) ?? baseTask.taskType;
+      tasksById.set(taskId, {
+        ...baseTask,
+        turnId: baseTask.turnId ?? activity.turnId,
+        title: deriveTaskTitle(activity, payload),
+        startedAt: activity.createdAt,
+        ...(nextTaskType ? { taskType: nextTaskType } : {}),
+      });
+      continue;
+    }
+
+    if (activity.kind === "task.progress") {
+      const description = asTrimmedString(payload?.detail) ?? activity.summary;
+      const lastToolName = asTrimmedString(payload?.lastToolName);
+      tasksById.set(taskId, {
+        ...baseTask,
+        turnId: baseTask.turnId ?? activity.turnId,
+        progressUpdates: [
+          ...baseTask.progressUpdates,
+          {
+            id: activity.id,
+            createdAt: activity.createdAt,
+            description,
+            ...(lastToolName ? { lastToolName } : {}),
+            ...(payload?.usage !== undefined ? { usage: payload.usage } : {}),
+          },
+        ],
+      });
+      continue;
+    }
+
+    const status =
+      payload?.status === "completed" ||
+      payload?.status === "failed" ||
+      payload?.status === "stopped"
+        ? payload.status
+        : "completed";
+    const summary = asTrimmedString(payload?.detail) ?? asTrimmedString(payload?.summary);
+    tasksById.set(taskId, {
+      ...baseTask,
+      turnId: baseTask.turnId ?? activity.turnId,
+      status,
+      completedAt: activity.createdAt,
+      ...(summary ? { summary } : {}),
+      ...(payload?.usage !== undefined ? { usage: payload.usage } : {}),
+    });
+  }
+
+  return [...tasksById.values()].toSorted(compareThreadTasks);
 }
 
 export function deriveWorkLogEntries(

@@ -39,7 +39,8 @@ The **Providers** section supports local overrides for each provider runtime:
   - Custom binary path
 - **OpenCode**
   - Custom binary path
-  - Authentication stays in OpenCode itself via `opencode auth login`; CUT3 does not store OpenCode credentials in this phase
+  - Authentication stays in OpenCode itself via `opencode auth login`, `opencode auth logout`, and `opencode mcp auth`; CUT3 does not store OpenCode credentials in this phase
+  - The OpenCode settings panel inspects `opencode auth list`, `opencode mcp list`, `opencode mcp auth list`, and the resolved OpenCode config paths so users can see current provider credentials, MCP connectivity, and copyable auth/debug commands without leaving CUT3
   - When the top-level CUT3 OpenRouter key is set, new OpenCode sessions also inherit it as `OPENROUTER_API_KEY` so OpenCode provider configs can reference it through `{env:OPENROUTER_API_KEY}`
 - **Kimi Code**
   - Custom binary path
@@ -130,9 +131,20 @@ Codex also has a per-turn `Fast Mode` toggle in the composer controls. This is s
 
 CUT3 hides the "token context left" UI for OpenRouter-routed models because the routed model can change and the remaining-context display is not reliable enough there.
 
+### Workspace instructions and command templates
+
+The composer now surfaces repo-owned workspace behavior directly:
+
+- CUT3 checks the active workspace root for `AGENTS.md` and shows whether it is currently available.
+- `/init` drafts or updates `AGENTS.md` using the current workspace shape, then saves it through the same guarded project-write path used by other workspace actions.
+- CUT3 loads repo-local slash-command templates from `.cut3/commands/*.md`.
+- Template frontmatter supports `description`, optional `provider`, optional `model`, optional `interactionMode`, optional `runtimeMode`, and optional `sendImmediately`.
+- Template bodies can interpolate `$ARGUMENTS` and `$1` through `$9`.
+- When `sendImmediately: true` is set, CUT3 expands the template and dispatches the turn directly. Otherwise it expands into the composer for review before sending.
+
 ### OpenCode MCP visibility
 
-OpenCode can use MCP servers from its own config, but CUT3 does not yet inspect or list those configured servers in `server.getConfig`. The OpenCode runtime still sees them when `opencode acp` loads your normal OpenCode configuration.
+CUT3 now inspects OpenCode MCP state through `opencode mcp list` and `opencode mcp auth list`, exposes those entries in `server.getConfig`, and shows the resolved OpenCode config sources in Settings. OpenCode still owns the actual OAuth flow and credential storage, so CUT3 only reports status and offers copyable CLI commands such as `opencode mcp auth <server>` and `opencode mcp debug <server>`.
 
 ## Related docs
 

@@ -3,7 +3,13 @@ import { FileDiff, type FileDiffMetadata, Virtualizer } from "@pierre/diffs/reac
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { ThreadId, type TurnId } from "@t3tools/contracts";
-import { ChevronLeftIcon, ChevronRightIcon, Columns2Icon, Rows3Icon } from "lucide-react";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  Columns2Icon,
+  GitPullRequestIcon,
+  Rows3Icon,
+} from "lucide-react";
 import {
   type WheelEvent as ReactWheelEvent,
   useCallback,
@@ -26,9 +32,13 @@ import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useStore } from "../store";
 import { useAppSettings } from "../appSettings";
 import { formatShortTimestamp } from "../timestampFormat";
+import { useComposerDraftStore } from "../composerDraftStore";
 import { DiffPanelLoadingState, DiffPanelShell, type DiffPanelMode } from "./DiffPanelShell";
 import { Button } from "./ui/button";
 import { ToggleGroup, Toggle } from "./ui/toggle-group";
+import { newCommandId, newThreadId } from "~/lib/utils";
+import { buildForkedThreadTitle, resolveCheckpointForkSource } from "../threadForking";
+import { toastManager } from "./ui/toast";
 
 type DiffRenderMode = "stacked" | "split";
 type DiffThemeType = "light" | "dark";
@@ -228,10 +238,18 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   const activeThread = useStore((store) =>
     activeThreadId ? store.threads.find((thread) => thread.id === activeThreadId) : undefined,
   );
+  const syncServerReadModel = useStore((store) => store.syncServerReadModel);
   const activeProjectId = activeThread?.projectId ?? null;
   const activeProject = useStore((store) =>
     activeProjectId ? store.projects.find((project) => project.id === activeProjectId) : undefined,
   );
+  const setComposerDraftProvider = useComposerDraftStore((store) => store.setProvider);
+  const setComposerDraftModel = useComposerDraftStore((store) => store.setModel);
+  const setComposerDraftRuntimeMode = useComposerDraftStore((store) => store.setRuntimeMode);
+  const setComposerDraftInteractionMode = useComposerDraftStore(
+    (store) => store.setInteractionMode,
+  );
+  const [isForkingCheckpoint, setIsForkingCheckpoint] = useState(false);
   const activeCwd = activeThread?.worktreePath ?? activeProject?.cwd;
   const gitBranchesQuery = useQuery(gitBranchesQueryOptions(activeCwd ?? null));
   const isGitRepo = gitBranchesQuery.data?.isRepo ?? true;
@@ -295,6 +313,34 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
         : null,
     [conversationCheckpointTurnCount, selectedTurn],
   );
+  const activeForkSource = useMemo(() => {
+    if (selectedTurn) {
+      return resolveCheckpointForkSource({
+        ...selectedTurn,
+        checkpointTurnCount:
+          selectedTurn.checkpointTurnCount ??
+          inferredCheckpointTurnCountByTurnId[selectedTurn.turnId],
+      });
+    }
+
+    if (typeof conversationCheckpointTurnCount !== "number") {
+      return null;
+    }
+
+    const latestConversationSummary = orderedTurnDiffSummaries.find((summary) => {
+      const turnCount =
+        summary.checkpointTurnCount ?? inferredCheckpointTurnCountByTurnId[summary.turnId];
+      return turnCount === conversationCheckpointTurnCount;
+    });
+    return latestConversationSummary
+      ? resolveCheckpointForkSource(latestConversationSummary)
+      : null;
+  }, [
+    conversationCheckpointTurnCount,
+    inferredCheckpointTurnCountByTurnId,
+    orderedTurnDiffSummaries,
+    selectedTurn,
+  ]);
   const activeCheckpointRange = selectedTurn
     ? selectedCheckpointRange
     : conversationCheckpointRange;
@@ -325,6 +371,68 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     : null;
   const checkpointDiffErrorDetail = getCheckpointDiffErrorDetail(activeCheckpointDiffQuery.error);
   const isRetryingCheckpointDiff = activeCheckpointDiffQuery.isFetching && !isLoadingCheckpointDiff;
+  const onForkCheckpoint = useCallback(async () => {
+    const api = readNativeApi();
+    if (!api || !activeThread || !activeForkSource || isForkingCheckpoint) {
+      return;
+    }
+
+    const nextThreadId = newThreadId();
+    const createdAt = new Date().toISOString();
+    const nextThreadTitle = buildForkedThreadTitle(activeThread.title);
+    setIsForkingCheckpoint(true);
+    try {
+      await api.orchestration.dispatchCommand({
+        type: "thread.fork",
+        commandId: newCommandId(),
+        sourceThreadId: activeThread.id,
+        threadId: nextThreadId,
+        title: nextThreadTitle,
+        model: activeThread.model,
+        runtimeMode: activeThread.runtimeMode,
+        interactionMode: activeThread.interactionMode,
+        branch: activeThread.branch,
+        worktreePath: activeThread.worktreePath,
+        source: activeForkSource,
+        createdAt,
+      });
+      const snapshot = await api.orchestration.getSnapshot();
+      syncServerReadModel(snapshot);
+      if (activeThread.provider) {
+        setComposerDraftProvider(nextThreadId, activeThread.provider);
+      }
+      setComposerDraftModel(nextThreadId, activeThread.model);
+      setComposerDraftRuntimeMode(nextThreadId, activeThread.runtimeMode);
+      setComposerDraftInteractionMode(nextThreadId, activeThread.interactionMode);
+      await navigate({
+        to: "/$threadId",
+        params: { threadId: nextThreadId },
+      });
+      toastManager.add({
+        type: "success",
+        title: "Thread forked",
+        description: nextThreadTitle,
+      });
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Could not fork thread",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+      });
+    } finally {
+      setIsForkingCheckpoint(false);
+    }
+  }, [
+    activeForkSource,
+    activeThread,
+    isForkingCheckpoint,
+    navigate,
+    setComposerDraftInteractionMode,
+    setComposerDraftModel,
+    setComposerDraftProvider,
+    setComposerDraftRuntimeMode,
+    syncServerReadModel,
+  ]);
 
   const selectedPatch = selectedTurn ? selectedTurnCheckpointDiff : conversationCheckpointDiff;
   const hasResolvedPatch = typeof selectedPatch === "string";
@@ -542,25 +650,38 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
           ))}
         </div>
       </div>
-      <ToggleGroup
-        className="shrink-0 [-webkit-app-region:no-drag]"
-        variant="outline"
-        size="xs"
-        value={[diffRenderMode]}
-        onValueChange={(value) => {
-          const next = value[0];
-          if (next === "stacked" || next === "split") {
-            setDiffRenderMode(next);
-          }
-        }}
-      >
-        <Toggle aria-label={diffCopy.stackedDiffView} value="stacked">
-          <Rows3Icon className="size-3" />
-        </Toggle>
-        <Toggle aria-label={diffCopy.splitDiffView} value="split">
-          <Columns2Icon className="size-3" />
-        </Toggle>
-      </ToggleGroup>
+      <div className="flex shrink-0 items-center gap-2 [-webkit-app-region:no-drag]">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 rounded-full px-2.5 text-xs"
+          onClick={() => void onForkCheckpoint()}
+          disabled={!activeForkSource || isForkingCheckpoint}
+        >
+          <GitPullRequestIcon className="size-3.5" />
+          {isForkingCheckpoint ? "Forking..." : "Fork thread here"}
+        </Button>
+        <ToggleGroup
+          className="shrink-0"
+          variant="outline"
+          size="xs"
+          value={[diffRenderMode]}
+          onValueChange={(value) => {
+            const next = value[0];
+            if (next === "stacked" || next === "split") {
+              setDiffRenderMode(next);
+            }
+          }}
+        >
+          <Toggle aria-label={diffCopy.stackedDiffView} value="stacked">
+            <Rows3Icon className="size-3" />
+          </Toggle>
+          <Toggle aria-label={diffCopy.splitDiffView} value="split">
+            <Columns2Icon className="size-3" />
+          </Toggle>
+        </ToggleGroup>
+      </div>
     </>
   );
 

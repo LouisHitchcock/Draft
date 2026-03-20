@@ -6,6 +6,7 @@ import {
   type KeybindingCommand,
   type CodexReasoningEffort,
   type MessageId,
+  type ProjectCommandTemplate,
   type ProjectId,
   type ProjectEntry,
   type ProjectScript,
@@ -19,6 +20,7 @@ import {
   type ServerProviderMcpStatus,
   type ServerProviderStatus,
   type ProviderKind,
+  type ThreadForkSource,
   type ThreadId,
   type TurnId,
   OrchestrationThreadActivity,
@@ -52,7 +54,12 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { gitBranchesQueryOptions, gitCreateWorktreeMutationOptions } from "~/lib/gitReactQuery";
 import { openRouterFreeModelsQueryOptions } from "~/lib/openRouterReactQuery";
-import { projectSearchEntriesQueryOptions } from "~/lib/projectReactQuery";
+import {
+  projectAgentsFileQueryOptions,
+  projectCommandTemplatesQueryOptions,
+  projectQueryKeys,
+  projectSearchEntriesQueryOptions,
+} from "~/lib/projectReactQuery";
 import {
   serverConfigQueryOptions,
   serverCopilotReasoningProbeQueryOptions,
@@ -74,6 +81,7 @@ import {
 } from "~/lib/openRouterModels";
 import { getModelPickerOptionDisplayParts } from "~/lib/modelPickerOptionDisplay";
 import { buildComposerMcpServerItems, providerSupportsMcp } from "../mcpServers";
+import { buildModelOptionsForDispatch, buildModelOptionsForSend } from "../chatDispatchOptions";
 
 import { isElectron } from "../env";
 import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
@@ -85,6 +93,7 @@ import {
   collapseExpandedComposerCursor,
   detectComposerTrigger,
   expandCollapsedComposerCursor,
+  parseStandaloneComposerSlashInvocation,
   parseStandaloneComposerSlashCommand,
   replaceTextRange,
 } from "../composer-logic";
@@ -94,6 +103,7 @@ import {
   derivePendingApprovals,
   derivePendingUserInputs,
   derivePhase,
+  deriveThreadTasks,
   deriveTimelineEntries,
   deriveActiveWorkStartedAt,
   deriveActivePlanState,
@@ -221,6 +231,8 @@ import { toastManager } from "./ui/toast";
 import { decodeProjectScriptKeybindingRule } from "~/lib/projectScriptKeybindings";
 import ProjectScriptsControl, { type NewProjectScriptInput } from "./ProjectScriptsControl";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
+import { ThreadTasksPanel } from "./chat/ThreadTasksPanel";
+import { ThreadExportDialog } from "./chat/ThreadExportDialog";
 import {
   commandForProjectScript,
   nextProjectScriptId,
@@ -258,6 +270,22 @@ import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "./Compose
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { LastInvokedScriptByProjectSchema } from "./ChatView.logic";
+import {
+  expandProjectCommandTemplate,
+  resolveProjectCommandTemplate,
+  type ProjectCommandTemplateOverrides,
+} from "../projectCommandTemplates";
+import {
+  buildThreadExportContents,
+  buildThreadExportFilename,
+  downloadThreadExportFile,
+  type ThreadExportFormat,
+} from "../threadExport";
+import {
+  buildForkedThreadTitle,
+  resolveForkThreadDraftSettings,
+  resolveLatestThreadForkSource,
+} from "../threadForking";
 
 const LAST_EDITOR_KEY = "cut3:last-editor";
 const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "cut3:last-invoked-script-by-project";
@@ -268,6 +296,7 @@ const IMAGE_ONLY_BOOTSTRAP_PROMPT =
 const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const EMPTY_PROJECT_ENTRIES: ProjectEntry[] = [];
+const EMPTY_PROJECT_COMMAND_TEMPLATES: ProjectCommandTemplate[] = [];
 const EMPTY_AVAILABLE_EDITORS: EditorId[] = [];
 const EMPTY_PROVIDER_STATUSES: ServerProviderStatus[] = [];
 const EMPTY_PROVIDER_MCP_STATUSES: ServerProviderMcpStatus[] = [];
@@ -525,6 +554,14 @@ type ComposerCommandItem =
     }
   | {
       id: string;
+      type: "template";
+      template: ProjectCommandTemplate;
+      label: string;
+      description: string;
+      sendImmediately: boolean;
+    }
+  | {
+      id: string;
       type: "model";
       provider: ProviderKind;
       model: ModelSlug;
@@ -649,6 +686,9 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
       {props.item.type === "slash-command" ? (
         <BotIcon className="size-4 text-muted-foreground/80" />
       ) : null}
+      {props.item.type === "template" ? (
+        <BotIcon className="size-4 text-muted-foreground/80" />
+      ) : null}
       {props.item.type === "model" ? (
         <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
           model
@@ -675,6 +715,11 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
             )}
           >
             {props.item.state}
+          </Badge>
+        ) : null}
+        {props.item.type === "template" && props.item.sendImmediately ? (
+          <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+            send
           </Badge>
         ) : null}
       </span>
@@ -835,6 +880,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
     useState<Record<string, number>>({});
   const [expandedWorkGroups, setExpandedWorkGroups] = useState<Record<string, boolean>>({});
   const [planSidebarOpen, setPlanSidebarOpen] = useState(false);
+  const [isForkingThread, setIsForkingThread] = useState(false);
+  const [isThreadExportDialogOpen, setIsThreadExportDialogOpen] = useState(false);
+  const [threadExportFormat, setThreadExportFormat] = useState<ThreadExportFormat>("markdown");
+  const [threadExportPath, setThreadExportPath] = useState("");
+  const [isSavingThreadExport, setIsSavingThreadExport] = useState(false);
   const [isComposerFooterCompact, setIsComposerFooterCompact] = useState(false);
   // Tracks whether the user explicitly dismissed the sidebar for the active turn.
   const planSidebarDismissedForTurnRef = useRef<string | null>(null);
@@ -844,6 +894,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [terminalFocusRequestId, setTerminalFocusRequestId] = useState(0);
   const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
+  const [pendingTemplateOverrides, setPendingTemplateOverrides] =
+    useState<ProjectCommandTemplateOverrides | null>(null);
   const [isProviderSetupDialogOpen, setIsProviderSetupDialogOpen] = useState(false);
   const [isManageModelsDialogOpen, setIsManageModelsDialogOpen] = useState(false);
   const [isRefreshingProviderSetupState, setIsRefreshingProviderSetupState] = useState(false);
@@ -1347,35 +1399,23 @@ export default function ChatView({ threadId }: ChatViewProps) {
   }, [composerDraft.effort, copilotProbedEffort, reasoningOptions, selectedProvider]);
   const selectedCodexFastModeEnabled =
     selectedProvider === "codex" ? composerDraft.codexFastMode : false;
-  const selectedModelOptionsForDispatch = useMemo(() => {
-    if (selectedProvider === "codex") {
-      const codexOptions = {
-        ...(supportsReasoningEffort && selectedEffort ? { reasoningEffort: selectedEffort } : {}),
-        ...(selectedCodexSupportsFastMode && selectedCodexFastModeEnabled
-          ? { fastMode: true }
-          : {}),
-      };
-      return Object.keys(codexOptions).length > 0 ? { codex: codexOptions } : undefined;
-    }
-
-    if (selectedProvider === "copilot") {
-      const copilotReasoningEffort =
-        supportsReasoningEffort && selectedEffort && selectedEffort !== "xhigh"
-          ? selectedEffort
-          : undefined;
-      return copilotReasoningEffort
-        ? { copilot: { reasoningEffort: copilotReasoningEffort } }
-        : undefined;
-    }
-
-    return undefined;
-  }, [
-    selectedCodexFastModeEnabled,
-    selectedCodexSupportsFastMode,
-    selectedEffort,
-    selectedProvider,
-    supportsReasoningEffort,
-  ]);
+  const selectedModelOptionsForDispatch = useMemo(
+    () =>
+      buildModelOptionsForDispatch({
+        provider: selectedProvider,
+        supportsReasoningEffort,
+        selectedEffort,
+        selectedCodexSupportsFastMode,
+        selectedCodexFastModeEnabled,
+      }),
+    [
+      selectedCodexFastModeEnabled,
+      selectedCodexSupportsFastMode,
+      selectedEffort,
+      selectedProvider,
+      supportsReasoningEffort,
+    ],
+  );
   const providerOptionsForDispatch = useMemo(
     () =>
       buildProviderOptionsForDispatch({
@@ -1383,6 +1423,107 @@ export default function ChatView({ threadId }: ChatViewProps) {
         settings,
       }),
     [selectedProvider, settings],
+  );
+  const seedForkedThreadDraft = useCallback(
+    (
+      nextThreadId: ThreadId,
+      forkThreadDraftSettings: ReturnType<typeof resolveForkThreadDraftSettings>,
+    ) => {
+      setComposerDraftProvider(nextThreadId, forkThreadDraftSettings.provider);
+      setComposerDraftModel(nextThreadId, forkThreadDraftSettings.model);
+      setComposerDraftRuntimeMode(nextThreadId, forkThreadDraftSettings.runtimeMode);
+      setComposerDraftInteractionMode(nextThreadId, forkThreadDraftSettings.interactionMode);
+      setComposerDraftEffort(nextThreadId, selectedEffort);
+      setComposerDraftCodexFastMode(
+        nextThreadId,
+        forkThreadDraftSettings.provider === "codex" ? composerDraft.codexFastMode : false,
+      );
+    },
+    [
+      composerDraft.codexFastMode,
+      selectedEffort,
+      setComposerDraftCodexFastMode,
+      setComposerDraftEffort,
+      setComposerDraftInteractionMode,
+      setComposerDraftModel,
+      setComposerDraftProvider,
+      setComposerDraftRuntimeMode,
+    ],
+  );
+  const forkThreadFromSource = useCallback(
+    async (source: ThreadForkSource) => {
+      const api = readNativeApi();
+      if (!api || !activeThread || !activeProject || !isServerThread || isForkingThread) {
+        return;
+      }
+
+      const nextThreadId = newThreadId();
+      const createdAt = new Date().toISOString();
+      const nextThreadTitle = truncateTitle(buildForkedThreadTitle(activeThread.title));
+      const forkThreadDraftSettings = resolveForkThreadDraftSettings(activeThread);
+
+      setIsForkingThread(true);
+      try {
+        await api.orchestration.dispatchCommand({
+          type: "thread.fork",
+          commandId: newCommandId(),
+          sourceThreadId: activeThread.id,
+          threadId: nextThreadId,
+          title: nextThreadTitle,
+          model: forkThreadDraftSettings.model,
+          runtimeMode: forkThreadDraftSettings.runtimeMode,
+          interactionMode: forkThreadDraftSettings.interactionMode,
+          branch: activeThread.branch,
+          worktreePath: activeThread.worktreePath,
+          source,
+          createdAt,
+        });
+        const snapshot = await api.orchestration.getSnapshot();
+        syncServerReadModel(snapshot);
+        seedForkedThreadDraft(nextThreadId, forkThreadDraftSettings);
+        await navigate({
+          to: "/$threadId",
+          params: { threadId: nextThreadId },
+        });
+        toastManager.add({
+          type: "success",
+          title: "Thread forked",
+          description: nextThreadTitle,
+        });
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Could not fork thread",
+          description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        });
+      } finally {
+        setIsForkingThread(false);
+      }
+    },
+    [
+      activeProject,
+      activeThread,
+      isForkingThread,
+      isServerThread,
+      navigate,
+      seedForkedThreadDraft,
+      syncServerReadModel,
+    ],
+  );
+  const onForkCurrentThread = useCallback(() => {
+    if (!activeThread) {
+      return;
+    }
+    void forkThreadFromSource(resolveLatestThreadForkSource(activeThread));
+  }, [activeThread, forkThreadFromSource]);
+  const onForkMessage = useCallback(
+    (messageId: MessageId) => {
+      void forkThreadFromSource({
+        kind: "message",
+        messageId,
+      });
+    },
+    [forkThreadFromSource],
   );
   const openOpenRouterApiKeyDialog = useCallback(
     (continuation: "submit-form" | "implement-plan-in-new-thread" | null) => {
@@ -1393,19 +1534,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     },
     [settings.openRouterApiKey],
   );
-  const ensureOpenRouterApiKeyConfigured = useCallback(
-    (continuation: "submit-form" | "implement-plan-in-new-thread") => {
-      if (!selectedModelUsesOpenRouter) {
-        return true;
-      }
-      if (settings.openRouterApiKey.trim().length > 0) {
-        return true;
-      }
-      openOpenRouterApiKeyDialog(continuation);
-      return false;
-    },
-    [openOpenRouterApiKeyDialog, selectedModelUsesOpenRouter, settings.openRouterApiKey],
-  );
   const openKimiApiKeyDialog = useCallback(
     (continuation: "submit-form" | "implement-plan-in-new-thread" | null) => {
       pendingKimiContinuationRef.current = continuation;
@@ -1415,49 +1543,85 @@ export default function ChatView({ threadId }: ChatViewProps) {
     },
     [settings.kimiApiKey],
   );
-  const ensureKimiApiKeyConfigured = useCallback(
-    (continuation: "submit-form" | "implement-plan-in-new-thread") => {
-      if (selectedProvider !== "kimi") {
+  const ensureOpenRouterApiKeyForDispatch = useCallback(
+    (input: {
+      provider: ProviderKind;
+      model: string;
+      continuation: "submit-form" | "implement-plan-in-new-thread";
+    }) => {
+      if (!(input.provider === "codex" && isCodexOpenRouterModel(input.model))) {
+        return true;
+      }
+      if (settings.openRouterApiKey.trim().length > 0) {
+        return true;
+      }
+      openOpenRouterApiKeyDialog(input.continuation);
+      return false;
+    },
+    [openOpenRouterApiKeyDialog, settings.openRouterApiKey],
+  );
+  const ensureKimiApiKeyForDispatch = useCallback(
+    (input: {
+      provider: ProviderKind;
+      continuation: "submit-form" | "implement-plan-in-new-thread";
+    }) => {
+      if (input.provider !== "kimi") {
         return true;
       }
       if (settings.kimiApiKey.trim().length > 0) {
         return true;
       }
-      openKimiApiKeyDialog(continuation);
+      openKimiApiKeyDialog(input.continuation);
       return false;
     },
-    [openKimiApiKeyDialog, selectedProvider, settings.kimiApiKey],
+    [openKimiApiKeyDialog, settings.kimiApiKey],
+  );
+  const ensureProviderCredentialsForDispatch = useCallback(
+    (input: {
+      provider: ProviderKind;
+      model: string;
+      continuation: "submit-form" | "implement-plan-in-new-thread";
+    }) => {
+      if (!ensureOpenRouterApiKeyForDispatch(input)) {
+        return false;
+      }
+      return ensureKimiApiKeyForDispatch(input);
+    },
+    [ensureKimiApiKeyForDispatch, ensureOpenRouterApiKeyForDispatch],
   );
   const ensureProviderCredentialsConfigured = useCallback(
     (continuation: "submit-form" | "implement-plan-in-new-thread") => {
-      if (!ensureOpenRouterApiKeyConfigured(continuation)) {
-        return false;
-      }
-      return ensureKimiApiKeyConfigured(continuation);
+      return ensureProviderCredentialsForDispatch({
+        provider: selectedProvider,
+        model: selectedModel,
+        continuation,
+      });
     },
-    [ensureKimiApiKeyConfigured, ensureOpenRouterApiKeyConfigured],
+    [ensureProviderCredentialsForDispatch, selectedModel, selectedProvider],
   );
-  const ensureSelectedOpenRouterModelSupportsTools = useCallback(
-    (threadId?: ThreadId) => {
-      if (!selectedModelUsesOpenRouter) {
+  const ensureOpenRouterModelSupportsToolsForDispatch = useCallback(
+    (input: { provider: ProviderKind; model: string; threadId: ThreadId | undefined }) => {
+      const usesOpenRouter = input.provider === "codex" && isCodexOpenRouterModel(input.model);
+      if (!usesOpenRouter) {
         return true;
       }
-      if (selectedModel === OPENROUTER_FREE_ROUTER_MODEL || !hasLiveOpenRouterCatalog) {
+      if (input.model === OPENROUTER_FREE_ROUTER_MODEL || !hasLiveOpenRouterCatalog) {
         return true;
       }
 
+      const openRouterModel = openRouterModelsBySlug.get(input.model) ?? null;
       let message: string | null = null;
-      if (selectedOpenRouterModel === null) {
-        message = `\`${selectedModel}\` is not in OpenRouter's current live free catalog. Refresh the list, pick another listed free model, or use \`openrouter/free\`.`;
-      } else if (!supportsOpenRouterNativeToolCalling(selectedOpenRouterModel)) {
-        message = `${selectedOpenRouterModel.name} does not advertise the full OpenRouter native tool-calling surface (\`tools\` + \`tool_choice\`), and CUT3 requires both for agent turns. Switch to another OpenRouter free model or use \`openrouter/free\`.`;
+      if (openRouterModel === null) {
+        message = `\`${input.model}\` is not in OpenRouter's current live free catalog. Refresh the list, pick another listed free model, or use \`openrouter/free\`.`;
+      } else if (!supportsOpenRouterNativeToolCalling(openRouterModel)) {
+        message = `${openRouterModel.name} does not advertise the full OpenRouter native tool-calling surface (\`tools\` + \`tool_choice\`), and CUT3 requires both for agent turns. Switch to another OpenRouter free model or use \`openrouter/free\`.`;
       }
       if (message === null) {
         return true;
       }
 
-      if (threadId) {
-        setStoreThreadError(threadId, message);
+      if (input.threadId) {
+        setStoreThreadError(input.threadId, message);
       } else {
         toastManager.add({
           type: "error",
@@ -1467,13 +1631,17 @@ export default function ChatView({ threadId }: ChatViewProps) {
       }
       return false;
     },
-    [
-      hasLiveOpenRouterCatalog,
-      selectedModel,
-      selectedModelUsesOpenRouter,
-      selectedOpenRouterModel,
-      setStoreThreadError,
-    ],
+    [hasLiveOpenRouterCatalog, openRouterModelsBySlug, setStoreThreadError],
+  );
+  const ensureSelectedOpenRouterModelSupportsTools = useCallback(
+    (threadId?: ThreadId) => {
+      return ensureOpenRouterModelSupportsToolsForDispatch({
+        provider: selectedProvider,
+        model: selectedModel,
+        threadId: threadId ?? undefined,
+      });
+    },
+    [ensureOpenRouterModelSupportsToolsForDispatch, selectedModel, selectedProvider],
   );
   const selectedModelForPicker = selectedModel;
   const selectedModelForPickerWithCustomFallback = useMemo(() => {
@@ -1555,6 +1723,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     () => deriveWorkLogEntries(threadActivities, activeLatestTurn?.turnId ?? undefined),
     [activeLatestTurn?.turnId, threadActivities],
   );
+  const threadTasks = useMemo(() => deriveThreadTasks(threadActivities), [threadActivities]);
   const latestTurnHasToolActivity = useMemo(
     () => hasToolActivityForTurn(threadActivities, activeLatestTurn?.turnId),
     [activeLatestTurn?.turnId, threadActivities],
@@ -1830,6 +1999,115 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
     return byUserMessageId;
   }, [inferredCheckpointTurnCountByTurnId, timelineEntries, turnDiffSummaryByAssistantMessageId]);
+  const threadExportWorkspaceRoot = activeThread?.worktreePath ?? activeProject?.cwd ?? undefined;
+  const threadExportDefaultFilename = useMemo(
+    () =>
+      activeThread ? buildThreadExportFilename(activeThread, threadExportFormat) : "thread.md",
+    [activeThread, threadExportFormat],
+  );
+  const updateThreadExportFormat = useCallback(
+    (format: ThreadExportFormat) => {
+      setThreadExportFormat(format);
+      const nextExtension = format === "json" ? ".json" : ".md";
+      const fallbackFilename = activeThread
+        ? buildThreadExportFilename(activeThread, format)
+        : `thread${nextExtension}`;
+      setThreadExportPath((existing) => {
+        const trimmed = existing.trim();
+        if (trimmed.length === 0) {
+          return fallbackFilename;
+        }
+        return /\.(md|json)$/i.test(trimmed)
+          ? trimmed.replace(/\.(md|json)$/i, nextExtension)
+          : `${trimmed}${nextExtension}`;
+      });
+    },
+    [activeThread],
+  );
+  const buildCurrentThreadExport = useCallback(
+    (format: ThreadExportFormat) => {
+      if (!activeThread) {
+        return null;
+      }
+      const exportedAt = new Date().toISOString();
+      return {
+        filename: buildThreadExportFilename(activeThread, format),
+        contents: buildThreadExportContents(format, {
+          thread: activeThread,
+          project: activeProject ?? null,
+          provider: selectedProvider,
+          workLogEntries,
+          tasks: threadTasks,
+          exportedAt,
+        }),
+      };
+    },
+    [activeProject, activeThread, selectedProvider, threadTasks, workLogEntries],
+  );
+  const openThreadExportDialog = useCallback(() => {
+    if (!activeThread) {
+      return;
+    }
+    setThreadExportPath((existing) =>
+      existing.trim().length > 0
+        ? existing
+        : buildThreadExportFilename(activeThread, threadExportFormat),
+    );
+    setIsThreadExportDialogOpen(true);
+  }, [activeThread, threadExportFormat]);
+  const onDownloadThreadExport = useCallback(() => {
+    const nextExport = buildCurrentThreadExport(threadExportFormat);
+    if (!nextExport) {
+      return;
+    }
+    downloadThreadExportFile(nextExport.filename, nextExport.contents, threadExportFormat);
+  }, [buildCurrentThreadExport, threadExportFormat]);
+  const onSaveThreadExportToWorkspace = useCallback(() => {
+    const api = readNativeApi();
+    const relativePath = threadExportPath.trim();
+    const nextExport = buildCurrentThreadExport(threadExportFormat);
+    if (!api || !threadExportWorkspaceRoot || !nextExport) {
+      return;
+    }
+    if (!relativePath) {
+      toastManager.add({
+        type: "warning",
+        title: "Enter a workspace path",
+      });
+      return;
+    }
+
+    setIsSavingThreadExport(true);
+    void api.projects
+      .writeFile({
+        cwd: threadExportWorkspaceRoot,
+        relativePath,
+        contents: nextExport.contents,
+      })
+      .then((result) => {
+        setIsThreadExportDialogOpen(false);
+        toastManager.add({
+          type: "success",
+          title: "Thread export saved",
+          description: result.relativePath,
+        });
+      })
+      .catch((error) => {
+        toastManager.add({
+          type: "error",
+          title: "Could not save thread export",
+          description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        });
+      })
+      .then(
+        () => {
+          setIsSavingThreadExport(false);
+        },
+        () => {
+          setIsSavingThreadExport(false);
+        },
+      );
+  }, [buildCurrentThreadExport, threadExportFormat, threadExportPath, threadExportWorkspaceRoot]);
 
   const completionSummary = useMemo(() => {
     if (!latestTurnSettled) return null;
@@ -1878,6 +2156,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     timelineEntries,
   ]);
   const gitCwd = activeThread?.worktreePath ?? activeProject?.cwd ?? null;
+  const activeWorkspaceCwd = gitCwd ?? activeProject?.cwd ?? null;
   const composerTriggerKind = composerTrigger?.kind ?? null;
   const pathTriggerQuery = composerTrigger?.kind === "path" ? composerTrigger.query : "";
   const isPathTrigger = composerTriggerKind === "path";
@@ -1889,6 +2168,16 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const effectivePathQuery = pathTriggerQuery.length > 0 ? debouncedPathQuery : "";
   const branchesQuery = useQuery(gitBranchesQueryOptions(gitCwd));
   const serverConfigQuery = useQuery(serverConfigQueryOptions());
+  const agentsFileQuery = useQuery(
+    projectAgentsFileQueryOptions({
+      cwd: activeWorkspaceCwd,
+    }),
+  );
+  const commandTemplatesQuery = useQuery(
+    projectCommandTemplatesQueryOptions({
+      cwd: activeWorkspaceCwd,
+    }),
+  );
   const workspaceEntriesQuery = useQuery(
     projectSearchEntriesQueryOptions({
       cwd: gitCwd,
@@ -1898,10 +2187,30 @@ export default function ChatView({ threadId }: ChatViewProps) {
     }),
   );
   const workspaceEntries = workspaceEntriesQuery.data?.entries ?? EMPTY_PROJECT_ENTRIES;
-  const providerMcpStatuses = serverConfigQuery.data?.mcpServers ?? EMPTY_PROVIDER_MCP_STATUSES;
+  const projectCommandTemplates =
+    commandTemplatesQuery.data?.commands ?? EMPTY_PROJECT_COMMAND_TEMPLATES;
+  const providerMcpStatuses = useMemo<ServerProviderMcpStatus[]>(() => {
+    const baseStatuses = serverConfigQuery.data?.mcpServers ?? EMPTY_PROVIDER_MCP_STATUSES;
+    const mergedStatuses = new Map(baseStatuses.map((status) => [status.provider, status]));
+
+    if (openCodeStateQuery.data) {
+      mergedStatuses.set("opencode", {
+        provider: "opencode",
+        supported: openCodeStateQuery.data.mcpSupported,
+        servers: openCodeStateQuery.data.mcpSupported ? openCodeStateQuery.data.mcpServers : [],
+      });
+    }
+
+    return (["codex", "copilot", "kimi", "opencode"] as const)
+      .map((provider) => mergedStatuses.get(provider))
+      .filter((status): status is ServerProviderMcpStatus => status != null);
+  }, [openCodeStateQuery.data, serverConfigQuery.data?.mcpServers]);
   const composerMcpProvider: ProviderKind = useMemo(() => {
     const provider = activeThread?.session?.provider ?? activeThread?.provider;
-    return provider === "codex" || provider === "copilot" || provider === "kimi"
+    return provider === "codex" ||
+      provider === "copilot" ||
+      provider === "kimi" ||
+      provider === "opencode"
       ? provider
       : selectedProvider;
   }, [activeThread?.provider, activeThread?.session?.provider, selectedProvider]);
@@ -1945,6 +2254,16 @@ export default function ChatView({ threadId }: ChatViewProps) {
           label: "/default",
           description: "Switch this thread back to normal chat mode",
         },
+        {
+          id: "slash:init",
+          type: "slash-command",
+          command: "init",
+          label: "/init",
+          description:
+            agentsFileQuery.data?.status === "available"
+              ? "Update the workspace AGENTS.md file"
+              : "Create the workspace AGENTS.md file",
+        },
       ];
       if (composerMcpSupported) {
         slashCommandItems.splice(2, 0, {
@@ -1955,13 +2274,29 @@ export default function ChatView({ threadId }: ChatViewProps) {
           description: "Show MCP servers for the active provider",
         });
       }
+      const templateItems: Array<Extract<ComposerCommandItem, { type: "template" }>> =
+        projectCommandTemplates.map((template) => ({
+          id: `template:${template.name}`,
+          type: "template",
+          template,
+          label: `/${template.name}`,
+          description: template.description,
+          sendImmediately: template.sendImmediately === true,
+        }));
       const query = composerTrigger.query.trim().toLowerCase();
       if (!query) {
-        return [...slashCommandItems];
+        return [...slashCommandItems, ...templateItems];
       }
-      return slashCommandItems.filter(
-        (item) => item.command.includes(query) || item.label.slice(1).includes(query),
-      );
+      return [...slashCommandItems, ...templateItems].filter((item) => {
+        if (item.type === "slash-command") {
+          return item.command.includes(query) || item.label.slice(1).includes(query);
+        }
+        return (
+          item.template.name.toLowerCase().includes(query) ||
+          item.description.toLowerCase().includes(query) ||
+          item.label.slice(1).toLowerCase().includes(query)
+        );
+      });
     }
 
     if (composerTrigger.kind === "slash-mcp") {
@@ -2002,6 +2337,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
     composerMcpSupported,
     composerMcpProvider,
     composerTrigger,
+    agentsFileQuery.data?.status,
+    projectCommandTemplates,
     providerMcpStatuses,
     searchableModelOptions,
     selectedServiceTierSetting,
@@ -3227,6 +3564,61 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [activeThread, isConnecting, isRevertingCheckpoint, isSendBusy, phase, setThreadError],
   );
 
+  const stageExpandedTemplateInComposer = useCallback(
+    (expandedTemplate: ReturnType<typeof expandProjectCommandTemplate>) => {
+      const nextText = expandedTemplate.text;
+      const nextCursor = collapseExpandedComposerCursor(nextText, nextText.length);
+      const nextOverrides =
+        Object.keys(expandedTemplate.overrides).length > 0 ? expandedTemplate.overrides : null;
+      setPendingTemplateOverrides(nextOverrides);
+      promptRef.current = nextText;
+      setPrompt(nextText);
+      setComposerHighlightedItemId(null);
+      setComposerCursor(nextCursor);
+      setComposerTrigger(detectComposerTrigger(nextText, nextText.length));
+      window.requestAnimationFrame(() => {
+        composerEditorRef.current?.focusAt(nextCursor);
+      });
+    },
+    [setPrompt],
+  );
+
+  const runInitCommand = useCallback(async () => {
+    const api = readNativeApi();
+    if (!api || !activeWorkspaceCwd) {
+      toastManager.add({
+        type: "error",
+        title: "Workspace path unavailable",
+        description: "AGENTS.md can only be created from an active workspace.",
+      });
+      return;
+    }
+
+    try {
+      const draft = await api.projects.draftAgentsFile({ cwd: activeWorkspaceCwd });
+      await api.projects.writeFile({
+        cwd: activeWorkspaceCwd,
+        relativePath: draft.relativePath,
+        contents: draft.contents,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: projectQueryKeys.agentsFile(activeWorkspaceCwd),
+      });
+      toastManager.add({
+        type: "success",
+        title: draft.mode === "create" ? "AGENTS.md created" : "AGENTS.md updated",
+        description: draft.relativePath,
+      });
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Could not update AGENTS.md",
+        description:
+          error instanceof Error ? error.message : "An error occurred while writing AGENTS.md.",
+      });
+    }
+  }, [activeWorkspaceCwd, queryClient]);
+
   const onSend = async (e?: { preventDefault: () => void }) => {
     e?.preventDefault();
     const api = readNativeApi();
@@ -3263,19 +3655,86 @@ export default function ChatView({ threadId }: ChatViewProps) {
     const standaloneSlashCommand =
       composerImages.length === 0 ? parseStandaloneComposerSlashCommand(trimmed) : null;
     if (standaloneSlashCommand) {
-      await handleInteractionModeChange(standaloneSlashCommand);
+      if (standaloneSlashCommand === "init") {
+        await runInitCommand();
+      } else {
+        await handleInteractionModeChange(standaloneSlashCommand);
+      }
       promptRef.current = "";
       clearComposerDraftContent(activeThread.id);
+      setPendingTemplateOverrides(null);
       setComposerHighlightedItemId(null);
       setComposerCursor(0);
       setComposerTrigger(null);
       return;
     }
-    if (!trimmed && composerImages.length === 0) return;
-    if (!ensureProviderCredentialsConfigured("submit-form")) {
+    const standaloneSlashInvocation =
+      composerImages.length === 0 ? parseStandaloneComposerSlashInvocation(trimmed) : null;
+    let textForSend = trimmed;
+    let templateOverridesForSend = pendingTemplateOverrides;
+    if (standaloneSlashInvocation) {
+      const template = resolveProjectCommandTemplate(
+        projectCommandTemplates,
+        standaloneSlashInvocation.command,
+      );
+      if (template) {
+        const expandedTemplate = expandProjectCommandTemplate({
+          template,
+          argumentsText: standaloneSlashInvocation.argumentsText,
+        });
+        if (!expandedTemplate.sendImmediately) {
+          stageExpandedTemplateInComposer(expandedTemplate);
+          return;
+        }
+        textForSend = expandedTemplate.text.trim();
+        templateOverridesForSend =
+          Object.keys(expandedTemplate.overrides).length > 0 ? expandedTemplate.overrides : null;
+      }
+    }
+    if (!textForSend && composerImages.length === 0) return;
+    const providerForSend = templateOverridesForSend?.provider ?? selectedProvider;
+    const modelForSend = resolveAppModelSelection(
+      providerForSend,
+      allModelOptionsByProvider[providerForSend].map((option) => option.slug),
+      templateOverridesForSend?.model ?? selectedModel,
+    ) as ModelSlug;
+    const runtimeModeForSend = templateOverridesForSend?.runtimeMode ?? runtimeMode;
+    const interactionModeForSend = templateOverridesForSend?.interactionMode ?? interactionMode;
+    const sendOpenRouterModel =
+      providerForSend === "codex" && isCodexOpenRouterModel(modelForSend)
+        ? (openRouterModelsBySlug.get(modelForSend) ?? null)
+        : null;
+    const modelOptionsForCurrentSend = buildModelOptionsForSend({
+      provider: providerForSend,
+      model: modelForSend,
+      composerEffort: composerDraft.effort ?? null,
+      codexFastModeEnabled: composerDraft.codexFastMode,
+      copilotReasoningProbe: copilotReasoningProbeQuery.data,
+      openRouterSupportsReasoningEffort:
+        sendOpenRouterModel !== null &&
+        supportsOpenRouterReasoningEffortControl(sendOpenRouterModel) &&
+        sendOpenRouterModel.supportsReasoning,
+    });
+    const providerOptionsForCurrentSend = buildProviderOptionsForDispatch({
+      provider: providerForSend,
+      settings,
+    });
+    if (
+      !ensureProviderCredentialsForDispatch({
+        provider: providerForSend,
+        model: modelForSend,
+        continuation: "submit-form",
+      })
+    ) {
       return;
     }
-    if (!ensureSelectedOpenRouterModelSupportsTools(activeThread.id)) {
+    if (
+      !ensureOpenRouterModelSupportsToolsForDispatch({
+        provider: providerForSend,
+        model: modelForSend,
+        threadId: activeThread.id,
+      })
+    ) {
       return;
     }
     if (!activeProject) return;
@@ -3326,7 +3785,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       {
         id: messageIdForSend,
         role: "user",
-        text: trimmed,
+        text: textForSend,
         ...(optimisticAttachments.length > 0 ? { attachments: optimisticAttachments } : {}),
         createdAt: messageCreatedAt,
         streaming: false,
@@ -3339,6 +3798,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     setThreadError(threadIdForSend, null);
     promptRef.current = "";
     clearComposerDraftContent(threadIdForSend);
+    setPendingTemplateOverrides(null);
     setComposerHighlightedItemId(null);
     setComposerCursor(0);
     setComposerTrigger(null);
@@ -3381,6 +3841,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         }
       }
       let titleSeed = trimmed;
+      titleSeed = textForSend;
       if (!titleSeed) {
         if (firstComposerImageName) {
           titleSeed = `Image: ${firstComposerImageName}`;
@@ -3390,7 +3851,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       }
       const title = truncateTitle(titleSeed);
       let threadCreateModel: ModelSlug =
-        selectedModel || (activeProject.model as ModelSlug) || DEFAULT_MODEL_BY_PROVIDER.codex;
+        modelForSend || (activeProject.model as ModelSlug) || DEFAULT_MODEL_BY_PROVIDER.codex;
 
       if (isLocalDraftThread) {
         await api.orchestration.dispatchCommand({
@@ -3400,8 +3861,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
           projectId: activeProject.id,
           title,
           model: threadCreateModel,
-          runtimeMode,
-          interactionMode,
+          runtimeMode: runtimeModeForSend,
+          interactionMode: interactionModeForSend,
           branch: nextThreadBranch,
           worktreePath: nextThreadWorktreePath,
           createdAt: activeThread.createdAt,
@@ -3449,9 +3910,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
         await persistThreadSettingsForNextTurn({
           threadId: threadIdForSend,
           createdAt: messageCreatedAt,
-          ...(selectedModel ? { model: selectedModel } : {}),
-          runtimeMode,
-          interactionMode,
+          ...(modelForSend ? { model: modelForSend } : {}),
+          runtimeMode: runtimeModeForSend,
+          interactionMode: interactionModeForSend,
         });
       }
 
@@ -3464,19 +3925,19 @@ export default function ChatView({ threadId }: ChatViewProps) {
         message: {
           messageId: messageIdForSend,
           role: "user",
-          text: trimmed || IMAGE_ONLY_BOOTSTRAP_PROMPT,
+          text: textForSend || IMAGE_ONLY_BOOTSTRAP_PROMPT,
           attachments: turnAttachments,
         },
-        model: selectedModel || undefined,
+        model: modelForSend || undefined,
         serviceTier: selectedServiceTier,
-        ...(selectedModelOptionsForDispatch
-          ? { modelOptions: selectedModelOptionsForDispatch }
+        ...(modelOptionsForCurrentSend ? { modelOptions: modelOptionsForCurrentSend } : {}),
+        ...(providerOptionsForCurrentSend
+          ? { providerOptions: providerOptionsForCurrentSend }
           : {}),
-        ...(providerOptionsForDispatch ? { providerOptions: providerOptionsForDispatch } : {}),
-        provider: selectedProvider,
+        provider: providerForSend,
         assistantDeliveryMode: settings.enableAssistantStreaming ? "streaming" : "buffered",
-        runtimeMode,
-        interactionMode,
+        runtimeMode: runtimeModeForSend,
+        interactionMode: interactionModeForSend,
         createdAt: messageCreatedAt,
       });
       turnStartSucceeded = true;
@@ -3503,11 +3964,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
           const next = existing.filter((message) => message.id !== messageIdForSend);
           return next.length === existing.length ? existing : next;
         });
-        promptRef.current = trimmed;
-        setPrompt(trimmed);
-        setComposerCursor(collapseExpandedComposerCursor(trimmed, trimmed.length));
+        promptRef.current = textForSend;
+        setPrompt(textForSend);
+        setPendingTemplateOverrides(templateOverridesForSend);
+        setComposerCursor(collapseExpandedComposerCursor(textForSend, textForSend.length));
         addComposerImagesToDraft(composerImagesSnapshot.map(cloneComposerImageForRetry));
-        setComposerTrigger(detectComposerTrigger(trimmed, trimmed.length));
+        setComposerTrigger(detectComposerTrigger(textForSend, textForSend.length));
       }
       setThreadError(
         threadIdForSend,
@@ -4278,11 +4740,38 @@ export default function ChatView({ threadId }: ChatViewProps) {
           }
           return;
         }
+        if (item.command === "init") {
+          const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "/init", {
+            expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
+          });
+          if (applied) {
+            setComposerHighlightedItemId(null);
+          }
+          return;
+        }
         const nextMode = item.command === "plan" ? "plan" : "default";
         void handleInteractionModeChange(nextMode);
         const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
           expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
         });
+        if (applied) {
+          setComposerHighlightedItemId(null);
+        }
+        return;
+      }
+      if (item.type === "template") {
+        const replacement = `/${item.template.name} `;
+        const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+          snapshot.value,
+          trigger.rangeEnd,
+          replacement,
+        );
+        const applied = applyPromptReplacement(
+          trigger.rangeStart,
+          replacementRangeEnd,
+          replacement,
+          { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
+        );
         if (applied) {
           setComposerHighlightedItemId(null);
         }
@@ -4350,6 +4839,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
         );
         return;
       }
+      if (pendingTemplateOverrides && nextPrompt !== promptRef.current) {
+        setPendingTemplateOverrides(null);
+      }
       promptRef.current = nextPrompt;
       setPrompt(nextPrompt);
       setComposerCursor(nextCursor);
@@ -4361,6 +4853,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       activePendingProgress?.activeQuestion,
       activePendingUserInput,
       onChangeActivePendingUserInputCustomAnswer,
+      pendingTemplateOverrides,
       setPrompt,
     ],
   );
@@ -4495,6 +4988,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
           onUpdateProjectScript={updateProjectScript}
           onDeleteProjectScript={deleteProjectScript}
           onToggleDiff={onToggleDiff}
+          onForkThread={onForkCurrentThread}
+          onExportThread={openThreadExportDialog}
+          canForkThread={isServerThread && !isForkingThread}
+          canExportThread={isServerThread}
         />
       </header>
 
@@ -4528,6 +5025,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 />
               </div>
             ) : null}
+            <ThreadTasksPanel
+              tasks={threadTasks}
+              timestampFormat={timestampFormat}
+              checkpointTurnCountByTurnId={inferredCheckpointTurnCountByTurnId}
+            />
             <div className="relative flex min-h-0 flex-1 flex-col">
               {/* Messages */}
               <div
@@ -4561,6 +5063,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
                   onOpenTurnDiff={onOpenTurnDiff}
                   revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                   onRevertUserMessage={onRevertUserMessage}
+                  onForkMessage={onForkMessage}
+                  isForkingThread={isForkingThread}
                   isRevertingCheckpoint={isRevertingCheckpoint}
                   onImageExpand={onExpandTimelineImage}
                   markdownCwd={gitCwd ?? undefined}
@@ -4756,6 +5260,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     }
                     disabled={isConnecting || isComposerApprovalState}
                   />
+                  {activeWorkspaceCwd ? (
+                    <div className="px-2.5 pb-2 pt-1 text-[11px] text-muted-foreground/70 sm:px-3">
+                      {agentsFileQuery.data?.status === "available"
+                        ? `Using workspace instructions from ${agentsFileQuery.data.relativePath}`
+                        : "No workspace AGENTS.md found. Run /init to create one."}
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Bottom toolbar */}
@@ -5143,6 +5654,24 @@ export default function ChatView({ threadId }: ChatViewProps) {
               onPrepared={handlePreparedPullRequestThread}
             />
           ) : null}
+          <ThreadExportDialog
+            open={isThreadExportDialogOpen}
+            onOpenChange={(open) => {
+              if (!isSavingThreadExport) {
+                setIsThreadExportDialogOpen(open);
+              }
+            }}
+            threadTitle={activeThread.title}
+            workspaceRoot={threadExportWorkspaceRoot}
+            format={threadExportFormat}
+            onFormatChange={updateThreadExportFormat}
+            savePath={threadExportPath}
+            onSavePathChange={setThreadExportPath}
+            defaultFilename={threadExportDefaultFilename}
+            onDownload={onDownloadThreadExport}
+            onSaveToWorkspace={onSaveThreadExportToWorkspace}
+            isSavingToWorkspace={isSavingThreadExport}
+          />
         </div>
         {/* end chat column */}
 
@@ -5450,7 +5979,34 @@ interface ChatHeaderProps {
   onUpdateProjectScript: (scriptId: string, input: NewProjectScriptInput) => Promise<void>;
   onDeleteProjectScript: (scriptId: string) => Promise<void>;
   onToggleDiff: () => void;
+  onForkThread: () => void;
+  onExportThread: () => void;
+  canForkThread: boolean;
+  canExportThread: boolean;
 }
+
+const ThreadHeaderActionsMenu = memo(function ThreadHeaderActionsMenu(props: {
+  onForkThread: () => void;
+  onExportThread: () => void;
+  canForkThread: boolean;
+  canExportThread: boolean;
+}) {
+  return (
+    <Menu>
+      <MenuTrigger render={<Button aria-label="Thread actions" size="icon-xs" variant="outline" />}>
+        <EllipsisIcon aria-hidden="true" className="size-4" />
+      </MenuTrigger>
+      <MenuPopup align="end">
+        <MenuItem onClick={props.onForkThread} disabled={!props.canForkThread}>
+          Fork thread
+        </MenuItem>
+        <MenuItem onClick={props.onExportThread} disabled={!props.canExportThread}>
+          Export thread
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
+  );
+});
 
 const ChatHeader = memo(function ChatHeader({
   activeThreadId,
@@ -5470,6 +6026,10 @@ const ChatHeader = memo(function ChatHeader({
   onUpdateProjectScript,
   onDeleteProjectScript,
   onToggleDiff,
+  onForkThread,
+  onExportThread,
+  canForkThread,
+  canExportThread,
 }: ChatHeaderProps) {
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -5513,6 +6073,12 @@ const ChatHeader = memo(function ChatHeader({
           />
         )}
         {activeProjectName && <GitActionsControl gitCwd={gitCwd} activeThreadId={activeThreadId} />}
+        <ThreadHeaderActionsMenu
+          onForkThread={onForkThread}
+          onExportThread={onExportThread}
+          canForkThread={canForkThread}
+          canExportThread={canExportThread}
+        />
         <Tooltip>
           <TooltipTrigger
             render={

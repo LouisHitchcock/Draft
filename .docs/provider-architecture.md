@@ -16,7 +16,7 @@ Current push channels include:
 Request bodies cover more than provider lifecycle calls. The WebSocket surface currently includes:
 
 - orchestration commands and diff/snapshot queries
-- project registry search/write operations
+- project registry search/write operations, including workspace `AGENTS.md` discovery/drafting and `.cut3/commands/*.md` template discovery
 - shell/editor integration
 - git operations
 - terminal operations
@@ -31,8 +31,10 @@ Provider-native runtime details are hidden behind the server provider layer:
 
 Unexpected provider exits are reduced into orchestration session state as stopped sessions that still preserve the runtime exit reason in `thread.session.lastError`, so crashes do not render as silent clean stops in the UI.
 
+When a thread resolves to a workspace root and that workspace contains `AGENTS.md`, the server-side provider reactor wraps each outgoing provider turn with the contents of that file before dispatching the turn to the active provider runtime. This keeps workspace instructions provider-agnostic instead of relying on a provider-specific session bootstrap mechanism.
+
 Codex, GitHub Copilot, OpenCode, and Kimi Code are the currently implemented providers. Gemini is a visible coming-soon entry in the picker, and `claudeCode` plus `cursor` remain unavailable placeholders for future support.
 
-In the first OpenCode phase, CUT3 treats OpenCode auth and MCP configuration as provider-owned concerns. CUT3 launches `opencode acp`, consumes its ACP model/session events, and applies per-session runtime-mode overrides through `OPENCODE_CONFIG_CONTENT`, but it does not yet inspect OpenCode's configured MCP server list or proxy OpenCode's credential flows.
+In the current OpenCode phase, CUT3 still treats credential storage and OAuth flows as provider-owned concerns, but it now inspects OpenCode's resolved config paths plus `opencode auth list`, `opencode mcp list`, and `opencode mcp auth list` to surface provider credentials and MCP status in both Settings and `server.getConfig`. CUT3 still launches `opencode acp`, consumes its ACP model/session events, and applies per-session runtime-mode overrides through `OPENCODE_CONFIG_CONTENT` rather than proxying the underlying auth flows itself.
 
 For the researched GLM Coding Plan and MiniMax roadmap, see [./glm-minimax-support-plan.md](./glm-minimax-support-plan.md).

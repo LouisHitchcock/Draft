@@ -49,6 +49,21 @@ Published CUT3 builds are listed on the [CUT3 Releases page](https://github.com/
 
 Once the app is running, choose Codex, GitHub Copilot, OpenCode, or Kimi Code from the provider picker before starting a session.
 
+## Workspace instructions and slash commands
+
+CUT3 now recognizes two repo-owned workspace surfaces:
+
+- `AGENTS.md` at the workspace root. When it exists, CUT3 wraps every new provider turn with those workspace instructions on the server side.
+- `.cut3/commands/*.md` for repo-local slash-command templates.
+
+From the composer:
+
+- Run `/init` to create or update the workspace `AGENTS.md` through CUT3's guarded project write path.
+- Type `/` to see built-in commands plus any templates discovered from `.cut3/commands/*.md`.
+- Template frontmatter can set `description`, optional `provider`, optional `model`, optional `interactionMode`, optional `runtimeMode`, and optional `sendImmediately`.
+
+Template bodies support `$ARGUMENTS` plus positional placeholders `$1` through `$9`.
+
 ## Build your own desktop release
 
 If you do not want to wait for a GitHub release, you can build a desktop artifact locally for your own platform.
@@ -86,7 +101,7 @@ Open Settings in the app to configure provider-specific behavior on the current 
 
 - **Appearance**: choose the base light/dark/system mode, switch to integrated presets like Lilac, and configure a custom chat background image with adjustable fade and blur.
 - **Language**: switch the settings experience and shared app shell between English and Persian. Persian also flips document direction and locale-aware time/date formatting in the web UI.
-- **Provider overrides**: set custom binary paths for Codex, Copilot, OpenCode, or Kimi, plus an optional Codex home path, a shared OpenRouter API key, and a Kimi API key. OpenCode authentication still happens outside CUT3 through `opencode auth login`, Kimi CLI authentication can use either `kimi login` or the in-shell `/login` flow when you are not using an API key, and new OpenCode sessions now inherit that shared OpenRouter key as `OPENROUTER_API_KEY` when the OpenCode provider config expects it.
+- **Provider overrides**: set custom binary paths for Codex, Copilot, OpenCode, or Kimi, plus an optional Codex home path, a shared OpenRouter API key, and a Kimi API key. OpenCode authentication still happens outside CUT3 through `opencode auth login`, `opencode auth logout`, and `opencode mcp auth`, but the OpenCode settings panel now inspects the resolved OpenCode config paths plus `opencode auth list`, `opencode mcp list`, and `opencode mcp auth list` so CUT3 can show current credentials, MCP status, and copyable recovery commands. Kimi CLI authentication can use either `kimi login` or the in-shell `/login` flow when you are not using an API key, and new OpenCode sessions now inherit that shared OpenRouter key as `OPENROUTER_API_KEY` when the OpenCode provider config expects it.
 - **OpenRouter free models**: review the current OpenRouter entries that are explicitly free-locked and compatible with CUT3's native tool-calling path (`tools` plus `tool_choice`), keep the built-in `openrouter/free` router handy, and pin any listed model into the picker.
 - **Custom model slugs**: save extra model ids for GitHub Copilot, OpenCode, Kimi, custom Codex models, or current OpenRouter `:free` slugs so they appear in the model picker and `/model` suggestions.
 - **Picker controls**: the chat composer now uses a searchable grouped model picker with direct `Connect provider` and `Manage models` actions.
@@ -106,6 +121,8 @@ The chat toolbar exposes two additional execution controls:
 - **Interaction mode**: switch between normal `Chat` turns and `Plan` turns for plan-first collaboration.
 
 When a plan is active, CUT3 can keep it open in a sidebar and export it by copying, downloading markdown, or saving it into the workspace.
+
+Threads also expose fork and export controls directly in the chat surface. Use the thread actions menu to fork the current thread or export the full thread as markdown or JSON, use `Fork thread here` on individual messages to branch from that point, and use the diff panel to fork from a completed checkpoint. When a provider emits task lifecycle events, CUT3 shows a compact task panel above the timeline.
 
 For the full details, see [.docs/runtime-modes.md](.docs/runtime-modes.md).
 

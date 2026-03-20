@@ -41,6 +41,9 @@ function buildUnavailableOpenCodeState(
     binaryPath: input.binaryPath?.trim() || "opencode",
     credentials: [],
     models: [],
+    mcpSupported: false,
+    mcpServers: [],
+    configSources: [],
     message,
   } satisfies ServerOpenCodeState;
 }

@@ -59,6 +59,11 @@ import { GitManager } from "./git/Services/GitManager.ts";
 import { TerminalManager } from "./terminal/Services/Manager.ts";
 import { Keybindings } from "./keybindings";
 import { searchWorkspaceEntries } from "./workspaceEntries";
+import {
+  draftProjectAgentsFile,
+  listProjectCommandTemplates,
+  readProjectAgentsFile,
+} from "./projectWorkspaceMetadata";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery";
 import { OrchestrationReactor } from "./orchestration/Services/OrchestrationReactor";
@@ -450,11 +455,28 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const providerStatuses = yield* providerHealth.getStatuses;
   const openCodeState = yield* OpenCodeState;
   let mcpServersCache: ReadonlyArray<ServerProviderMcpStatus> | null = null;
+  const clearMcpServersCache = () => {
+    mcpServersCache = null;
+  };
   const getMcpServers = () =>
     Effect.gen(function* () {
       if (mcpServersCache) {
         return mcpServersCache;
       }
+      const openCodeRuntimeState = yield* openCodeState.getState({ cwd: serverConfig.cwd }).pipe(
+        Effect.orElseSucceed(() => ({
+          status: "unavailable" as const,
+          fetchedAt: new Date(0).toISOString(),
+          checkedCwd: serverConfig.cwd,
+          binaryPath: "opencode",
+          credentials: [],
+          models: [],
+          mcpSupported: false,
+          mcpServers: [],
+          configSources: [],
+          message: "OpenCode MCP inspection unavailable.",
+        })),
+      );
       const mcpServers = [
         {
           provider: "codex" as const,
@@ -465,7 +487,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         },
         { provider: "copilot" as const, supported: false, servers: [] },
         { provider: "kimi" as const, supported: false, servers: [] },
-        { provider: "opencode" as const, supported: false, servers: [] },
+        {
+          provider: "opencode" as const,
+          supported: openCodeRuntimeState.mcpSupported,
+          servers: openCodeRuntimeState.mcpSupported ? openCodeRuntimeState.mcpServers : [],
+        },
       ] as const;
       mcpServersCache = mcpServers;
       return mcpServers;
@@ -1121,6 +1147,51 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.projectsReadAgentsFile: {
+        const body = stripRequestTag(request.body);
+        const authorizedWorkspaceRoot = yield* authorizePath({
+          requestedPath: body.cwd,
+          operation: "Project AGENTS read",
+        });
+        return yield* Effect.try({
+          try: () => readProjectAgentsFile({ ...body, cwd: authorizedWorkspaceRoot }),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to read workspace AGENTS.md: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.projectsDraftAgentsFile: {
+        const body = stripRequestTag(request.body);
+        const authorizedWorkspaceRoot = yield* authorizePath({
+          requestedPath: body.cwd,
+          operation: "Project AGENTS draft",
+        });
+        return yield* Effect.try({
+          try: () => draftProjectAgentsFile({ ...body, cwd: authorizedWorkspaceRoot }),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to draft workspace AGENTS.md: ${String(cause)}`,
+            }),
+        });
+      }
+
+      case WS_METHODS.projectsListCommandTemplates: {
+        const body = stripRequestTag(request.body);
+        const authorizedWorkspaceRoot = yield* authorizePath({
+          requestedPath: body.cwd,
+          operation: "Project command template discovery",
+        });
+        return yield* Effect.try({
+          try: () => listProjectCommandTemplates({ ...body, cwd: authorizedWorkspaceRoot }),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to discover workspace command templates: ${String(cause)}`,
+            }),
+        });
+      }
+
       case WS_METHODS.projectsWriteFile: {
         const body = stripRequestTag(request.body);
         const authorizedWorkspaceRoot = yield* authorizePath({
@@ -1356,16 +1427,19 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
       case WS_METHODS.serverGetOpenCodeState: {
         const body = stripRequestTag(request.body);
+        clearMcpServersCache();
         return yield* openCodeState.getState(body);
       }
 
       case WS_METHODS.serverAddOpenCodeCredential: {
         const body = stripRequestTag(request.body);
+        clearMcpServersCache();
         return yield* openCodeState.addCredential(body);
       }
 
       case WS_METHODS.serverRemoveOpenCodeCredential: {
         const body = stripRequestTag(request.body);
+        clearMcpServersCache();
         return yield* openCodeState.removeCredential(body);
       }
 

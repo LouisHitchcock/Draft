@@ -15,6 +15,9 @@ import {
   OrchestrationGetSnapshotResult,
   OrchestrationGetTurnDiffResult,
   OrchestrationReplayEventsResult,
+  ProjectAgentsFileResult,
+  ProjectDraftAgentsFileResult,
+  ProjectListCommandTemplatesResult,
   ProjectSearchEntriesResult,
   ProjectWriteFileResult,
   ServerConfigUpdatedPayload,
@@ -170,6 +173,16 @@ export function createWsNativeApi(): NativeApi {
     projects: {
       searchEntries: (input) =>
         requestWithSchema(WS_METHODS.projectsSearchEntries, ProjectSearchEntriesResult, input),
+      readAgentsFile: (input) =>
+        requestWithSchema(WS_METHODS.projectsReadAgentsFile, ProjectAgentsFileResult, input),
+      draftAgentsFile: (input) =>
+        requestWithSchema(WS_METHODS.projectsDraftAgentsFile, ProjectDraftAgentsFileResult, input),
+      listCommandTemplates: (input) =>
+        requestWithSchema(
+          WS_METHODS.projectsListCommandTemplates,
+          ProjectListCommandTemplatesResult,
+          input,
+        ),
       writeFile: (input) =>
         requestWithSchema(WS_METHODS.projectsWriteFile, ProjectWriteFileResult, input),
     },

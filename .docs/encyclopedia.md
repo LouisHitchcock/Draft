@@ -40,6 +40,18 @@ A single user-to-assistant work cycle inside a thread. It starts with user input
 
 A user-visible log item attached to a thread. In [the contracts][1], activities cover important non-message events like approvals, tool actions, and failures. They are projected into thread state in [projector.ts][4].
 
+#### Thread fork
+
+A new thread created from an existing thread's current state, a selected message, or a completed checkpoint. The fork replays durable thread events into a fresh thread record with new message, activity, and proposed-plan ids so projection storage stays consistent. See [the contracts][1] and [decider.ts][8].
+
+#### Thread export
+
+A client-side snapshot of a thread that CUT3 can download as markdown or JSON, or save into the workspace. Exports include messages, proposed plans, derived tasks, curated work-log entries, checkpoint diff summaries, and attachment metadata. See [README.md][25].
+
+#### Task panel
+
+A compact read-only summary of provider-emitted task lifecycle events. It is derived from thread activities, stays separate from the curated work log, and only appears when a provider actually emits task events. See [session-logic.ts][26].
+
 ### Orchestration
 
 Orchestration is the server-side domain layer that turns runtime activity into stable app state. The main entry point is [OrchestrationEngine.ts][7], with core logic in [decider.ts][8] and [projector.ts][4].
@@ -178,3 +190,5 @@ The file patch and changed-file summary for one turn. It is usually computed in 
 [22]: ../apps/server/src/checkpointing/Utils.ts
 [23]: ../apps/server/src/checkpointing/Diffs.ts
 [24]: ./architecture.md
+[25]: ../README.md
+[26]: ../apps/web/src/session-logic.ts

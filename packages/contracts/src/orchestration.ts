@@ -344,6 +344,38 @@ const ThreadCreateCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+export const ThreadForkSource = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("latest"),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("message"),
+    messageId: MessageId,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("checkpoint"),
+    turnCount: NonNegativeInt,
+  }),
+]);
+export type ThreadForkSource = typeof ThreadForkSource.Type;
+
+const ThreadForkCommand = Schema.Struct({
+  type: Schema.Literal("thread.fork"),
+  commandId: CommandId,
+  sourceThreadId: ThreadId,
+  threadId: ThreadId,
+  title: TrimmedNonEmptyString,
+  model: TrimmedNonEmptyString,
+  runtimeMode: RuntimeMode,
+  interactionMode: ProviderInteractionMode.pipe(
+    Schema.withDecodingDefault(() => DEFAULT_PROVIDER_INTERACTION_MODE),
+  ),
+  branch: Schema.NullOr(TrimmedNonEmptyString),
+  worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  source: ThreadForkSource,
+  createdAt: IsoDateTime,
+});
+
 const ThreadDeleteCommand = Schema.Struct({
   type: Schema.Literal("thread.delete"),
   commandId: CommandId,
@@ -466,6 +498,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   ThreadCreateCommand,
+  ThreadForkCommand,
   ThreadDeleteCommand,
   ThreadMetaUpdateCommand,
   ThreadRuntimeModeSetCommand,
@@ -485,6 +518,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   ThreadCreateCommand,
+  ThreadForkCommand,
   ThreadDeleteCommand,
   ThreadMetaUpdateCommand,
   ThreadRuntimeModeSetCommand,

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { applyModelsDevContextWindows, parseOpenCodeModelsOutput } from "./OpenCodeState";
+import {
+  applyModelsDevContextWindows,
+  mergeOpenCodeMcpServerStatuses,
+  parseOpenCodeMcpAuthListOutput,
+  parseOpenCodeMcpListOutput,
+  parseOpenCodeModelsOutput,
+} from "./OpenCodeState";
 
 describe("parseOpenCodeModelsOutput", () => {
   it("parses provider-scoped model ids from OpenCode CLI output", () => {
@@ -103,6 +109,120 @@ describe("applyModelsDevContextWindows", () => {
         providerId: "minimax-coding-plan",
         modelId: "minimax-m2.7",
         contextWindowTokens: 204_800,
+      },
+    ]);
+  });
+});
+
+describe("parseOpenCodeMcpListOutput", () => {
+  it("parses connected and failed MCP server entries from OpenCode CLI output", () => {
+    expect(
+      parseOpenCodeMcpListOutput(`
+        ┌  MCP Servers
+        │
+        ●  ✓ github connected
+        │      sh -c GITHUB_PERSONAL_ACCESS_TOKEN=$(gh auth token) npx -y @modelcontextprotocol/server-github
+        │
+        ●  ✗ paper failed
+        │      SSE error: Unable to connect. Is the computer able to access the url?
+        │      http://127.0.0.1:29979/mcp
+        │
+        └  2 server(s)
+      `),
+    ).toEqual([
+      {
+        name: "github",
+        connectionStatus: "connected",
+        target:
+          "sh -c GITHUB_PERSONAL_ACCESS_TOKEN=$(gh auth token) npx -y @modelcontextprotocol/server-github",
+      },
+      {
+        name: "paper",
+        connectionStatus: "failed",
+        message: "SSE error: Unable to connect. Is the computer able to access the url?",
+        target: "http://127.0.0.1:29979/mcp",
+      },
+    ]);
+  });
+});
+
+describe("parseOpenCodeMcpAuthListOutput", () => {
+  it("parses OAuth-capable MCP auth status entries from OpenCode CLI output", () => {
+    expect(
+      parseOpenCodeMcpAuthListOutput(`
+        ┌  MCP OAuth Status
+        │
+        ●  ✗ context7 not authenticated
+        │      https://mcp.context7.com/mcp
+        │
+        ●  ✓ sentry authenticated
+        │      https://mcp.sentry.dev/mcp
+        │
+        └  2 OAuth-capable server(s)
+      `),
+    ).toEqual([
+      {
+        name: "context7",
+        authStatus: "not_logged_in",
+        target: "https://mcp.context7.com/mcp",
+      },
+      {
+        name: "sentry",
+        authStatus: "o_auth",
+        target: "https://mcp.sentry.dev/mcp",
+      },
+    ]);
+  });
+});
+
+describe("mergeOpenCodeMcpServerStatuses", () => {
+  it("merges runtime MCP status with OAuth auth state for OpenCode", () => {
+    expect(
+      mergeOpenCodeMcpServerStatuses({
+        runtimeServers: [
+          {
+            name: "context7",
+            connectionStatus: "connected",
+            target: "https://mcp.context7.com/mcp",
+          },
+          {
+            name: "paper",
+            connectionStatus: "failed",
+            target: "http://127.0.0.1:29979/mcp",
+            message: "SSE error: Unable to connect.",
+          },
+        ],
+        authServers: [
+          {
+            name: "context7",
+            authStatus: "not_logged_in",
+            target: "https://mcp.context7.com/mcp",
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        name: "context7",
+        enabled: true,
+        state: "enabled",
+        authStatus: "not_logged_in",
+        toolCount: 0,
+        resourceCount: 0,
+        resourceTemplateCount: 0,
+        connectionStatus: "connected",
+        target: "https://mcp.context7.com/mcp",
+      },
+      {
+        name: "paper",
+        enabled: true,
+        state: "enabled",
+        authStatus: "unsupported",
+        toolCount: 0,
+        resourceCount: 0,
+        resourceTemplateCount: 0,
+        connectionStatus: "failed",
+        target: "http://127.0.0.1:29979/mcp",
+        message: "SSE error: Unable to connect.",
       },
     ]);
   });

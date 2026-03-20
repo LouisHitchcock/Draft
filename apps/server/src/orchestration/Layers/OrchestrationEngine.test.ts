@@ -2,6 +2,7 @@ import {
   CheckpointRef,
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
+  EventId,
   MessageId,
   ProjectId,
   ThreadId,
@@ -278,6 +279,489 @@ describe("OrchestrationEngine", () => {
         completedAt: createdAt,
       },
     ]);
+    await system.dispose();
+  });
+
+  it("forks a checkpoint into a new thread with fresh ids and filtered activities", async () => {
+    const system = await createOrchestrationSystem();
+    const { engine } = system;
+
+    const projectId = asProjectId("project-fork");
+    const sourceThreadId = ThreadId.makeUnsafe("thread-fork-source");
+    const forkThreadId = ThreadId.makeUnsafe("thread-fork-target");
+    const turn1Id = asTurnId("turn-fork-1");
+    const turn2Id = asTurnId("turn-fork-2");
+    const userMessage1Id = asMessageId("msg-fork-user-1");
+    const userMessage2Id = asMessageId("msg-fork-user-2");
+    const assistantMessage1Id = asMessageId("msg-fork-assistant-1");
+    const assistantMessage2Id = asMessageId("msg-fork-assistant-2");
+
+    await system.run(
+      engine.dispatch({
+        type: "project.create",
+        commandId: CommandId.makeUnsafe("cmd-project-fork-create"),
+        projectId,
+        title: "Fork Project",
+        workspaceRoot: "/tmp/project-fork",
+        defaultModel: "gpt-5-codex",
+        createdAt: "2026-03-01T09:00:00.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-create"),
+        threadId: sourceThreadId,
+        projectId,
+        title: "Source thread",
+        model: "gpt-5-codex",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: "feature/fork-source",
+        worktreePath: "/tmp/project-fork/worktrees/source",
+        createdAt: "2026-03-01T09:00:01.000Z",
+      }),
+    );
+
+    await system.run(
+      engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-turn-1-start"),
+        threadId: sourceThreadId,
+        message: {
+          messageId: userMessage1Id,
+          role: "user",
+          text: "First request",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-03-01T09:00:02.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-assistant-1-delta"),
+        threadId: sourceThreadId,
+        messageId: assistantMessage1Id,
+        delta: "First answer",
+        turnId: turn1Id,
+        createdAt: "2026-03-01T09:00:03.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-assistant-1-complete"),
+        threadId: sourceThreadId,
+        messageId: assistantMessage1Id,
+        turnId: turn1Id,
+        createdAt: "2026-03-01T09:00:04.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.proposed-plan.upsert",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-plan-1"),
+        threadId: sourceThreadId,
+        proposedPlan: {
+          id: "plan-fork-1",
+          turnId: turn1Id,
+          planMarkdown: "1. Inspect code\n2. Apply patch",
+          createdAt: "2026-03-01T09:00:05.000Z",
+          updatedAt: "2026-03-01T09:00:05.000Z",
+        },
+        createdAt: "2026-03-01T09:00:05.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.turn.diff.complete",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-diff-1"),
+        threadId: sourceThreadId,
+        turnId: turn1Id,
+        completedAt: "2026-03-01T09:00:06.000Z",
+        checkpointRef: asCheckpointRef("refs/t3/checkpoints/thread-fork-source/turn/1"),
+        status: "ready",
+        files: [
+          {
+            path: "src/app.ts",
+            kind: "modified",
+            additions: 4,
+            deletions: 1,
+          },
+        ],
+        assistantMessageId: assistantMessage1Id,
+        checkpointTurnCount: 1,
+        createdAt: "2026-03-01T09:00:06.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.activity.append",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-task-1"),
+        threadId: sourceThreadId,
+        activity: {
+          id: EventId.makeUnsafe("activity-thread-fork-task-1"),
+          tone: "tool",
+          kind: "task.started",
+          summary: "Task started",
+          payload: {
+            taskId: "task-1",
+            description: "Inspect workspace",
+          },
+          turnId: turn1Id,
+          createdAt: "2026-03-01T09:00:06.500Z",
+        },
+        createdAt: "2026-03-01T09:00:06.500Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.activity.append",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-approval-1"),
+        threadId: sourceThreadId,
+        activity: {
+          id: EventId.makeUnsafe("activity-thread-fork-approval-1"),
+          tone: "approval",
+          kind: "approval.requested",
+          summary: "Approval requested",
+          payload: {
+            requestId: "approval-request-1",
+            requestKind: "command",
+          },
+          turnId: turn1Id,
+          createdAt: "2026-03-01T09:00:06.700Z",
+        },
+        createdAt: "2026-03-01T09:00:06.700Z",
+      }),
+    );
+
+    await system.run(
+      engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-turn-2-start"),
+        threadId: sourceThreadId,
+        message: {
+          messageId: userMessage2Id,
+          role: "user",
+          text: "Second request",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-03-01T09:00:07.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-assistant-2-delta"),
+        threadId: sourceThreadId,
+        messageId: assistantMessage2Id,
+        delta: "Second answer",
+        turnId: turn2Id,
+        createdAt: "2026-03-01T09:00:08.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-assistant-2-complete"),
+        threadId: sourceThreadId,
+        messageId: assistantMessage2Id,
+        turnId: turn2Id,
+        createdAt: "2026-03-01T09:00:09.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.proposed-plan.upsert",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-plan-2"),
+        threadId: sourceThreadId,
+        proposedPlan: {
+          id: "plan-fork-2",
+          turnId: turn2Id,
+          planMarkdown: "1. Add tests\n2. Verify results",
+          createdAt: "2026-03-01T09:00:10.000Z",
+          updatedAt: "2026-03-01T09:00:10.000Z",
+        },
+        createdAt: "2026-03-01T09:00:10.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.turn.diff.complete",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-diff-2"),
+        threadId: sourceThreadId,
+        turnId: turn2Id,
+        completedAt: "2026-03-01T09:00:11.000Z",
+        checkpointRef: asCheckpointRef("refs/t3/checkpoints/thread-fork-source/turn/2"),
+        status: "ready",
+        files: [
+          {
+            path: "src/tests.ts",
+            kind: "added",
+            additions: 12,
+            deletions: 0,
+          },
+        ],
+        assistantMessageId: assistantMessage2Id,
+        checkpointTurnCount: 2,
+        createdAt: "2026-03-01T09:00:11.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.activity.append",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-task-2"),
+        threadId: sourceThreadId,
+        activity: {
+          id: EventId.makeUnsafe("activity-thread-fork-task-2"),
+          tone: "tool",
+          kind: "task.completed",
+          summary: "Task completed",
+          payload: {
+            taskId: "task-2",
+            status: "completed",
+            summary: "Verified tests",
+          },
+          turnId: turn2Id,
+          createdAt: "2026-03-01T09:00:11.500Z",
+        },
+        createdAt: "2026-03-01T09:00:11.500Z",
+      }),
+    );
+
+    await system.run(
+      engine.dispatch({
+        type: "thread.fork",
+        commandId: CommandId.makeUnsafe("cmd-thread-fork-run"),
+        sourceThreadId,
+        threadId: forkThreadId,
+        title: "Forked checkpoint thread",
+        model: "gpt-5-codex",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: "feature/fork-target",
+        worktreePath: "/tmp/project-fork/worktrees/forked",
+        source: {
+          kind: "checkpoint",
+          turnCount: 1,
+        },
+        createdAt: "2026-03-01T09:00:12.000Z",
+      }),
+    );
+
+    const readModel = await system.run(engine.getReadModel());
+    const forkedThread = readModel.threads.find((entry) => entry.id === forkThreadId);
+
+    expect(forkedThread).toBeDefined();
+    expect(forkedThread?.session).toBeNull();
+    expect(forkedThread?.title).toBe("Forked checkpoint thread");
+    expect(forkedThread?.messages.map((message) => message.text)).toEqual([
+      "First request",
+      "First answer",
+    ]);
+    expect(forkedThread?.messages.map((message) => message.id)).not.toEqual([
+      userMessage1Id,
+      assistantMessage1Id,
+    ]);
+    expect(forkedThread?.messages.some((message) => message.text === "Second request")).toBe(false);
+    expect(forkedThread?.proposedPlans).toHaveLength(1);
+    expect(forkedThread?.proposedPlans[0]?.planMarkdown).toContain("Inspect code");
+    expect(forkedThread?.proposedPlans[0]?.id).not.toBe("plan-fork-1");
+    expect(forkedThread?.checkpoints).toEqual([
+      {
+        turnId: turn1Id,
+        checkpointTurnCount: 1,
+        checkpointRef: asCheckpointRef("refs/t3/checkpoints/thread-fork-source/turn/1"),
+        status: "ready",
+        files: [
+          {
+            path: "src/app.ts",
+            kind: "modified",
+            additions: 4,
+            deletions: 1,
+          },
+        ],
+        assistantMessageId: forkedThread?.messages[1]?.id ?? null,
+        completedAt: "2026-03-01T09:00:06.000Z",
+      },
+    ]);
+    expect(forkedThread?.activities.map((activity) => activity.kind)).toEqual(["task.started"]);
+    expect(forkedThread?.activities[0]?.id).not.toBe("activity-thread-fork-task-1");
+    expect(
+      forkedThread?.activities.some((activity) => activity.kind === "approval.requested"),
+    ).toBe(false);
+
+    await system.dispose();
+  });
+
+  it("forks from a message without retaining later same-turn artifacts", async () => {
+    const system = await createOrchestrationSystem();
+    const { engine } = system;
+
+    const projectId = asProjectId("project-message-fork");
+    const sourceThreadId = ThreadId.makeUnsafe("thread-message-fork-source");
+    const forkThreadId = ThreadId.makeUnsafe("thread-message-fork-target");
+    const turnId = asTurnId("turn-message-fork-1");
+    const userMessageId = asMessageId("msg-message-fork-user-1");
+    const assistantMessageId = asMessageId("msg-message-fork-assistant-1");
+
+    await system.run(
+      engine.dispatch({
+        type: "project.create",
+        commandId: CommandId.makeUnsafe("cmd-project-message-fork-create"),
+        projectId,
+        title: "Message Fork Project",
+        workspaceRoot: "/tmp/project-message-fork",
+        defaultModel: "gpt-5-codex",
+        createdAt: "2026-03-01T10:00:00.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.makeUnsafe("cmd-thread-message-fork-create"),
+        threadId: sourceThreadId,
+        projectId,
+        title: "Source thread",
+        model: "gpt-5-codex",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt: "2026-03-01T10:00:01.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.makeUnsafe("cmd-thread-message-fork-turn-start"),
+        threadId: sourceThreadId,
+        message: {
+          messageId: userMessageId,
+          role: "user",
+          text: "Inspect the bug",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-03-01T10:00:02.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.message.assistant.delta",
+        commandId: CommandId.makeUnsafe("cmd-thread-message-fork-assistant-delta"),
+        threadId: sourceThreadId,
+        messageId: assistantMessageId,
+        delta: "I found the root cause.",
+        turnId,
+        createdAt: "2026-03-01T10:00:03.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.message.assistant.complete",
+        commandId: CommandId.makeUnsafe("cmd-thread-message-fork-assistant-complete"),
+        threadId: sourceThreadId,
+        messageId: assistantMessageId,
+        turnId,
+        createdAt: "2026-03-01T10:00:04.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.proposed-plan.upsert",
+        commandId: CommandId.makeUnsafe("cmd-thread-message-fork-plan"),
+        threadId: sourceThreadId,
+        proposedPlan: {
+          id: "plan-message-fork-1",
+          turnId,
+          planMarkdown: "1. Patch the bug\n2. Add tests",
+          createdAt: "2026-03-01T10:00:05.000Z",
+          updatedAt: "2026-03-01T10:00:05.000Z",
+        },
+        createdAt: "2026-03-01T10:00:05.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.turn.diff.complete",
+        commandId: CommandId.makeUnsafe("cmd-thread-message-fork-diff"),
+        threadId: sourceThreadId,
+        turnId,
+        completedAt: "2026-03-01T10:00:06.000Z",
+        checkpointRef: asCheckpointRef("refs/t3/checkpoints/thread-message-fork-source/turn/1"),
+        status: "ready",
+        files: [
+          {
+            path: "src/bug.ts",
+            kind: "modified",
+            additions: 3,
+            deletions: 1,
+          },
+        ],
+        assistantMessageId,
+        checkpointTurnCount: 1,
+        createdAt: "2026-03-01T10:00:06.000Z",
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.activity.append",
+        commandId: CommandId.makeUnsafe("cmd-thread-message-fork-task"),
+        threadId: sourceThreadId,
+        activity: {
+          id: EventId.makeUnsafe("activity-thread-message-fork-task-1"),
+          tone: "tool",
+          kind: "task.started",
+          summary: "Task started",
+          payload: {
+            taskId: "task-message-fork-1",
+            description: "Patch bug",
+          },
+          turnId,
+          createdAt: "2026-03-01T10:00:06.500Z",
+        },
+        createdAt: "2026-03-01T10:00:06.500Z",
+      }),
+    );
+
+    await system.run(
+      engine.dispatch({
+        type: "thread.fork",
+        commandId: CommandId.makeUnsafe("cmd-thread-message-fork-run"),
+        sourceThreadId,
+        threadId: forkThreadId,
+        title: "Forked from message",
+        model: "gpt-5-codex",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        source: {
+          kind: "message",
+          messageId: assistantMessageId,
+        },
+        createdAt: "2026-03-01T10:00:07.000Z",
+      }),
+    );
+
+    const readModel = await system.run(engine.getReadModel());
+    const forkedThread = readModel.threads.find((entry) => entry.id === forkThreadId);
+
+    expect(forkedThread?.messages.map((message) => message.text)).toEqual([
+      "Inspect the bug",
+      "I found the root cause.",
+    ]);
+    expect(forkedThread?.proposedPlans).toEqual([]);
+    expect(forkedThread?.checkpoints).toEqual([]);
+    expect(forkedThread?.activities).toEqual([]);
+
     await system.dispose();
   });
 
