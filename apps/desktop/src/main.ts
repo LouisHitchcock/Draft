@@ -22,16 +22,16 @@ import type {
   DesktopTheme,
   DesktopUpdateActionResult,
   DesktopUpdateState,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { autoUpdater } from "electron-updater";
 
-import type { ContextMenuItem } from "@t3tools/contracts";
-import { resolveAppReleaseBranding } from "@t3tools/shared/appRelease";
+import type { ContextMenuItem } from "@draft/contracts";
+import { resolveAppReleaseBranding } from "@draft/shared/appRelease";
 import {
   createDesktopBackendWsUrl,
   parseDesktopBackendReadyLine,
-} from "@t3tools/shared/desktopBackend";
-import { RotatingFileSink } from "@t3tools/shared/logging";
+} from "@draft/shared/desktopBackend";
+import { RotatingFileSink } from "@draft/shared/logging";
 import { showDesktopConfirmDialog } from "./confirmDialog";
 import { fixPath } from "./fixPath";
 import {
@@ -57,13 +57,12 @@ import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runti
 
 fixPath();
 
-function readBrandedEnv(name: string): string | undefined {
-  return process.env[`T4CODE_${name}`] ?? process.env[`CUT3_${name}`];
+function readDraftEnv(name: string): string | undefined {
+  return process.env[`DRAFT_${name}`];
 }
 
-function setBrandedEnv(name: string, value: string): void {
-  process.env[`T4CODE_${name}`] = value;
-  process.env[`CUT3_${name}`] = value;
+function setDraftEnv(name: string, value: string): void {
+  process.env[`DRAFT_${name}`] = value;
 }
 
 const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
@@ -79,7 +78,7 @@ const UPDATE_STATE_CHANNEL = "desktop:update-state";
 const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
 const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
 const UPDATE_INSTALL_CHANNEL = "desktop:update-install";
-const DESKTOP_SCHEME = "cut3";
+const DESKTOP_SCHEME = "draft";
 const ROOT_DIR = Path.resolve(__dirname, "../../..");
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
 const appReleaseBranding = resolveAppReleaseBranding({
@@ -87,8 +86,8 @@ const appReleaseBranding = resolveAppReleaseBranding({
   isDevelopment,
 });
 const STATE_DIR =
-  readBrandedEnv("STATE_DIR")?.trim() ||
-  Path.join(OS.homedir(), ".t3", appReleaseBranding.stateDirName);
+  readDraftEnv("STATE_DIR")?.trim() ||
+  Path.join(OS.homedir(), ".draft", appReleaseBranding.stateDirName);
 const APP_DISPLAY_NAME = appReleaseBranding.displayName;
 const APP_USER_MODEL_ID = appReleaseBranding.appId;
 const USER_DATA_DIR_NAME = appReleaseBranding.userDataDirName;
@@ -106,7 +105,7 @@ const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
 const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const BACKEND_MAX_OLD_SPACE_MB = 8_192;
 const backendReadyTimeoutOverride = Number.parseInt(
-  readBrandedEnv("BACKEND_READY_TIMEOUT_MS") ?? "",
+  readDraftEnv("BACKEND_READY_TIMEOUT_MS") ?? "",
   10,
 );
 const BACKEND_READY_TIMEOUT_MS =
@@ -547,8 +546,8 @@ function resolveEmbeddedCommitHash(): string | null {
 
   try {
     const raw = FS.readFileSync(packageJsonPath, "utf8");
-    const parsed = JSON.parse(raw) as { cut3CommitHash?: unknown };
-    return normalizeCommitHash(parsed.cut3CommitHash);
+    const parsed = JSON.parse(raw) as { draftCommitHash?: unknown };
+    return normalizeCommitHash(parsed.draftCommitHash);
   } catch {
     return null;
   }
@@ -559,7 +558,7 @@ function resolveAboutCommitHash(): string | null {
     return aboutCommitHashCache;
   }
 
-  const envCommitHash = normalizeCommitHash(readBrandedEnv("COMMIT_HASH"));
+  const envCommitHash = normalizeCommitHash(readDraftEnv("COMMIT_HASH"));
   if (envCommitHash) {
     aboutCommitHashCache = envCommitHash;
     return aboutCommitHashCache;
@@ -581,7 +580,7 @@ function resolveBackendEntry(): string {
 }
 
 function resolveBackendCwd(): string {
-  const override = readBrandedEnv("BACKEND_CWD")?.trim();
+  const override = readDraftEnv("BACKEND_CWD")?.trim();
   if (override) {
     return override;
   }
@@ -647,7 +646,7 @@ function handleFatalStartupError(stage: string, error: unknown): void {
   console.error(`[desktop] fatal startup error (${stage})`, error);
   if (!isQuitting) {
     isQuitting = true;
-    dialog.showErrorBox("CUT3 failed to start", `Stage: ${stage}\n${message}${detail}`);
+    dialog.showErrorBox("Draft failed to start", `Stage: ${stage}\n${message}${detail}`);
   }
   stopBackend();
   restoreStdIoCapture?.();
@@ -668,7 +667,7 @@ function updateBackendWsUrl(port: number): void {
     port,
     authToken: backendAuthToken,
   });
-  setBrandedEnv("DESKTOP_WS_URL", backendWsUrl);
+  setDraftEnv("DESKTOP_WS_URL", backendWsUrl);
   writeDesktopLogHeader(`backend websocket url updated port=${port}`);
   broadcastBackendWsUrl();
 }
@@ -764,7 +763,7 @@ function handleCheckForUpdatesMenuClick(): void {
     isPackaged: app.isPackaged,
     platform: process.platform,
     appImage: process.env.APPIMAGE,
-    disabledByEnv: readBrandedEnv("DISABLE_AUTO_UPDATE") === "1",
+    disabledByEnv: readDraftEnv("DISABLE_AUTO_UPDATE") === "1",
   });
   if (disabledReason) {
     console.info("[desktop-updater] Manual update check requested, but updates are disabled.");
@@ -791,7 +790,7 @@ async function checkForUpdatesFromMenu(): Promise<void> {
     void dialog.showMessageBox({
       type: "info",
       title: "You're up to date!",
-      message: `CUT3 ${updateState.currentVersion} is currently the newest version available.`,
+      message: `Draft ${updateState.currentVersion} is currently the newest version available.`,
       buttons: ["OK"],
     });
   } else if (updateState.status === "error") {
@@ -942,10 +941,10 @@ function resolveWindowIcon(): Electron.NativeImage | null {
  *
  * Electron derives the default userData path from `productName` in
  * package.json, which historically produced directories with spaces and
- * parentheses (e.g. `~/.config/T3 Code (Alpha)` on Linux). This is
+ * parentheses (e.g. `~/.config/draft-alpha` on Linux). This is
  * unfriendly for shell usage and violates Linux naming conventions.
  *
- * We override it to a clean lowercase name (`cut3`). If the legacy
+ * We override it to a clean lowercase name (`draft`). If the legacy
  * directory already exists we keep using it so existing users do not
  * lose their Chromium profile data (localStorage, cookies, sessions).
  */
@@ -1016,7 +1015,7 @@ function shouldEnableAutoUpdates(): boolean {
       isPackaged: app.isPackaged,
       platform: process.platform,
       appImage: process.env.APPIMAGE,
-      disabledByEnv: readBrandedEnv("DISABLE_AUTO_UPDATE") === "1",
+      disabledByEnv: readDraftEnv("DISABLE_AUTO_UPDATE") === "1",
     }) === null
   );
 }
@@ -1101,9 +1100,7 @@ function configureAutoUpdater(): void {
   updaterConfigured = true;
 
   const githubToken =
-    (
-      process.env.T4CODE_DESKTOP_UPDATE_GITHUB_TOKEN ?? process.env.CUT3_DESKTOP_UPDATE_GITHUB_TOKEN
-    )?.trim() ||
+    process.env.DRAFT_DESKTOP_UPDATE_GITHUB_TOKEN?.trim() ||
     process.env.GH_TOKEN?.trim() ||
     "";
   if (githubToken) {
@@ -1213,16 +1210,11 @@ function backendEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
     NODE_OPTIONS: backendNodeOptions,
-    T4CODE_MODE: "desktop",
-    T4CODE_NO_BROWSER: "1",
-    T4CODE_PORT: "0",
-    T4CODE_STATE_DIR: STATE_DIR,
-    T4CODE_AUTH_TOKEN: backendAuthToken,
-    CUT3_MODE: "desktop",
-    CUT3_NO_BROWSER: "1",
-    CUT3_PORT: "0",
-    CUT3_STATE_DIR: STATE_DIR,
-    CUT3_AUTH_TOKEN: backendAuthToken,
+    DRAFT_MODE: "desktop",
+    DRAFT_NO_BROWSER: "1",
+    DRAFT_PORT: "0",
+    DRAFT_STATE_DIR: STATE_DIR,
+    DRAFT_AUTH_TOKEN: backendAuthToken,
   };
 }
 
@@ -1633,7 +1625,7 @@ function createWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      additionalArguments: backendWsUrl ? [`--cut3-desktop-ws-url=${backendWsUrl}`] : [],
+      additionalArguments: backendWsUrl ? [`--draft-desktop-ws-url=${backendWsUrl}`] : [],
     },
   });
 

@@ -1,4 +1,4 @@
-import type { GitStatusResult } from "@t3tools/contracts";
+import type { GitStatusResult } from "@draft/contracts";
 import { assert, describe, it } from "vitest";
 import {
   buildGitActionProgressStages,
@@ -652,7 +652,7 @@ describe("when: branch has no upstream configured", () => {
     assert.deepEqual(quick, {
       kind: "show_hint",
       label: "Push",
-      hint: 'Add a "CUT3" remote before pushing or creating a PR.',
+      hint: 'Add a "Draft" remote before pushing or creating a PR.',
       disabled: true,
     });
   });
@@ -861,9 +861,9 @@ describe("buildGitActionProgressStages", () => {
       hasCustomCommitMessage: false,
       hasWorkingTreeChanges: true,
       forcePushOnly: true,
-      pushTarget: "CUT3/feature/test",
+      pushTarget: "Draft/feature/test",
     });
-    assert.deepEqual(stages, ["Pushing to CUT3/feature/test..."]);
+    assert.deepEqual(stages, ["Pushing to Draft/feature/test..."]);
   });
 
   it("skips commit stages for create-pr flow when push-only is forced", () => {
@@ -872,9 +872,9 @@ describe("buildGitActionProgressStages", () => {
       hasCustomCommitMessage: false,
       hasWorkingTreeChanges: true,
       forcePushOnly: true,
-      pushTarget: "CUT3/feature/test",
+      pushTarget: "Draft/feature/test",
     });
-    assert.deepEqual(stages, ["Pushing to CUT3/feature/test...", "Creating PR..."]);
+    assert.deepEqual(stages, ["Pushing to Draft/feature/test...", "Creating PR..."]);
   });
 
   it("includes commit stages for commit+push when working tree is dirty", () => {
@@ -882,12 +882,12 @@ describe("buildGitActionProgressStages", () => {
       action: "commit_push",
       hasCustomCommitMessage: false,
       hasWorkingTreeChanges: true,
-      pushTarget: "CUT3/feature/test",
+      pushTarget: "Draft/feature/test",
     });
     assert.deepEqual(stages, [
       "Generating commit message...",
       "Committing...",
-      "Pushing to CUT3/feature/test...",
+      "Pushing to Draft/feature/test...",
     ]);
   });
 });
@@ -924,13 +924,13 @@ describe("summarizeGitResult", () => {
       push: {
         status: "pushed",
         branch: "foo",
-        upstreamBranch: "CUT3/foo",
+        upstreamBranch: "Draft/foo",
       },
       pr: { status: "skipped_not_requested" },
     });
 
     assert.deepEqual(result, {
-      title: "Pushed abcdef0 to CUT3/foo",
+      title: "Pushed abcdef0 to Draft/foo",
       description: "fix: tighten quick action tooltip hover handling",
     });
   });

@@ -1,4 +1,4 @@
-import { type ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import { type ResolvedKeybindingsConfig } from "@draft/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { SquarePenIcon } from "lucide-react";
 import { useMemo } from "react";

@@ -3,7 +3,7 @@ import type {
   ProjectSkillName,
   ThreadShareId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 
 export const THREAD_RESUME_CONTEXT_ACTIVITY_KIND = "thread.resume-context.updated";
 export const THREAD_IMPORT_ACTIVITY_KIND = "thread.imported";

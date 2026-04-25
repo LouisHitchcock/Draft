@@ -1,9 +1,9 @@
 const VERSION_PRERELEASE_PATTERN = /^\d+\.\d+\.\d+-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)$/;
 const DEFAULT_DESKTOP_PRODUCT_NAME = "Draft";
-const DEFAULT_DESKTOP_APP_ID = "com.t3tools.t4code";
+const DEFAULT_DESKTOP_APP_ID = "com.draft.desktop";
 const DEFAULT_STAGE_LABEL = "Draft";
-const DEFAULT_STATE_DIR_NAME = "t4code";
-const DEFAULT_USER_DATA_DIR_NAME = "t4code";
+const DEFAULT_STATE_DIR_NAME = "desktop";
+const DEFAULT_USER_DATA_DIR_NAME = "draft";
 
 export interface AppReleaseBrandingInput {
   readonly version: string;

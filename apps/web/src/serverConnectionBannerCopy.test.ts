@@ -38,7 +38,7 @@ describe("getServerConnectionBannerDescription", () => {
   it("uses desktop-specific retry guidance in Electron", () => {
     expect(
       getServerConnectionBannerDescription({ retrying: true, isElectron: true, language: "en" }),
-    ).toContain("restart CUT3");
+    ).toContain("restart Draft");
   });
 
   it("keeps dev-server retry guidance in the browser", () => {

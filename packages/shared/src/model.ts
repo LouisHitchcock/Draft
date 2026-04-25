@@ -11,7 +11,7 @@ import {
   type ModelSlug,
   type ProviderKind,
   type ProviderReasoningLevel,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 
 type CatalogProvider = keyof typeof MODEL_OPTIONS_BY_PROVIDER;
 

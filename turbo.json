@@ -5,22 +5,15 @@
     "VITE_WS_URL",
     "VITE_DEV_SERVER_URL",
     "ELECTRON_RENDERER_PORT",
-    "CUT3_LOG_WS_EVENTS",
-    "CUT3_MODE",
-    "CUT3_PORT",
-    "CUT3_NO_BROWSER",
-    "CUT3_STATE_DIR",
-    "CUT3_AUTH_TOKEN",
-    "CUT3_DESKTOP_WS_URL",
-    "CUT3_HOST",
-    "CUT3_AUTO_BOOTSTRAP_PROJECT_FROM_CWD",
-    "T3CODE_LOG_WS_EVENTS",
-    "T3CODE_MODE",
-    "T3CODE_PORT",
-    "T3CODE_NO_BROWSER",
-    "T3CODE_STATE_DIR",
-    "T3CODE_AUTH_TOKEN",
-    "T3CODE_DESKTOP_WS_URL"
+    "DRAFT_LOG_WS_EVENTS",
+    "DRAFT_MODE",
+    "DRAFT_PORT",
+    "DRAFT_NO_BROWSER",
+    "DRAFT_STATE_DIR",
+    "DRAFT_AUTH_TOKEN",
+    "DRAFT_DESKTOP_WS_URL",
+    "DRAFT_HOST",
+    "DRAFT_AUTO_BOOTSTRAP_PROJECT_FROM_CWD"
   ],
   "tasks": {
     "build": {
@@ -28,7 +21,7 @@
       "outputs": ["dist/**", "dist-electron/**"]
     },
     "dev": {
-      "dependsOn": ["@t3tools/contracts#build"],
+      "dependsOn": ["@draft/contracts#build"],
       "cache": false,
       "persistent": true
     },

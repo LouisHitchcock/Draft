@@ -8,7 +8,7 @@ import {
   type TerminalRestartInput,
   type TerminalSessionSnapshot,
   type TerminalWriteInput,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 

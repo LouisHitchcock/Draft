@@ -11,9 +11,9 @@ import {
   TurnId,
   type OrchestrationThreadActivity,
   type ProviderRuntimeEvent,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Cache, Cause, Duration, Effect, Layer, Option, Ref, Stream } from "effect";
-import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
+import { makeDrainableWorker } from "@draft/shared/DrainableWorker";
 
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
@@ -42,8 +42,8 @@ const BUFFERED_COMMAND_TEXT_BY_ITEM_KEY_TTL = Duration.minutes(120);
 const MAX_BUFFERED_ASSISTANT_CHARS = 24_000;
 const MAX_BUFFERED_COMMAND_OUTPUT_CHARS = 96_000;
 const STRICT_PROVIDER_LIFECYCLE_GUARD =
-  (process.env.T4CODE_STRICT_PROVIDER_LIFECYCLE_GUARD ??
-    process.env.CUT3_STRICT_PROVIDER_LIFECYCLE_GUARD) !== "0";
+  (process.env.DRAFT_STRICT_PROVIDER_LIFECYCLE_GUARD ??
+    process.env[`CUT${3}_STRICT_PROVIDER_LIFECYCLE_GUARD`]) !== "0";
 
 type TurnStartRequestedDomainEvent = Extract<
   OrchestrationEvent,

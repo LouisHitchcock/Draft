@@ -1,4 +1,4 @@
-import { WS_CHANNELS } from "@t3tools/contracts";
+import { WS_CHANNELS } from "@draft/contracts";
 import { Schema } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

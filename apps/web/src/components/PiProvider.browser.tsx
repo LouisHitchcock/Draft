@@ -1,7 +1,7 @@
 import "../index.css";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { type ProviderKind, type ServerProviderStatus } from "@t3tools/contracts";
+import { type ProviderKind, type ServerProviderStatus } from "@draft/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
@@ -61,7 +61,7 @@ describe("Pi provider GUI", () => {
         authStatus: "unauthenticated",
         checkedAt: "2026-03-24T00:00:00.000Z",
         message:
-          "Pi is embedded in CUT3, but no authenticated Pi-backed models are currently available.",
+          "Pi is embedded in Draft, but no authenticated Pi-backed models are currently available.",
       },
     ];
 
@@ -93,13 +93,13 @@ describe("Pi provider GUI", () => {
       const piCard = await waitForElement(
         () =>
           Array.from(document.querySelectorAll<HTMLElement>("div, section")).find((element) =>
-            (element.textContent ?? "").includes("CUT3 embeds Pi through its Node SDK"),
+            (element.textContent ?? "").includes("Draft embeds Pi through its Node SDK"),
           ) ?? null,
         "Unable to find the Pi guidance card in the provider setup dialog.",
       );
 
       expect(piCard.textContent).toContain("Pi");
-      expect(piCard.textContent).toContain("CUT3 embeds Pi through its Node SDK");
+      expect(piCard.textContent).toContain("Draft embeds Pi through its Node SDK");
       expect(piCard.textContent).toContain("bunx pi");
     } finally {
       await screen.unmount();

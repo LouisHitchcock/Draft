@@ -10,7 +10,7 @@ import {
   ProviderSessionRuntimeStatus,
   RuntimeMode,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Option, Schema, ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -88,4 +88,4 @@ export interface ProviderSessionRuntimeRepositoryShape {
 export class ProviderSessionRuntimeRepository extends ServiceMap.Service<
   ProviderSessionRuntimeRepository,
   ProviderSessionRuntimeRepositoryShape
->()("t4code/persistence/Services/ProviderSessionRuntime/ProviderSessionRuntimeRepository") {}
+>()("draft/persistence/Services/ProviderSessionRuntime/ProviderSessionRuntimeRepository") {}

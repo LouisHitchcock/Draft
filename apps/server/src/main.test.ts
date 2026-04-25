@@ -2,14 +2,14 @@ import * as Http from "node:http";
 import path from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it, vi } from "@effect/vitest";
-import type { OrchestrationReadModel } from "@t3tools/contracts";
+import type { OrchestrationReadModel } from "@draft/contracts";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Command from "effect/unstable/cli/Command";
 import { FetchHttpClient } from "effect/unstable/http";
 import { beforeEach } from "vitest";
-import { NetService } from "@t3tools/shared/Net";
+import { NetService } from "@draft/shared/Net";
 
 import { CliConfig, recordStartupHeartbeat, t3Cli, type CliConfigShape } from "./main";
 import { ServerConfig, type ServerConfigShape } from "./config";
@@ -63,15 +63,15 @@ const testLayer = Layer.mergeAll(
 
 const runCli = (
   args: ReadonlyArray<string>,
-  env: Record<string, string> = { CUT3_NO_BROWSER: "true" },
+  env: Record<string, string> = { DRAFT_NO_BROWSER: "true" },
 ) => {
-  const uniqueStateDir = `/tmp/t3-cli-state-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const uniqueStateDir = `/tmp/draft-cli-state-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   return Command.runWith(t3Cli, { version: "0.0.0-test" })(args).pipe(
     Effect.provide(
       ConfigProvider.layer(
         ConfigProvider.fromEnv({
           env: {
-            CUT3_STATE_DIR: uniqueStateDir,
+            DRAFT_STATE_DIR: uniqueStateDir,
             ...env,
           },
         }),
@@ -100,7 +100,7 @@ it.layer(testLayer)("server CLI command", (it) => {
         "--host",
         "0.0.0.0",
         "--state-dir",
-        "/tmp/t3-cli-state",
+        "/tmp/draft-cli-state",
         "--dev-url",
         "http://127.0.0.1:5173",
         "--no-browser",
@@ -112,7 +112,7 @@ it.layer(testLayer)("server CLI command", (it) => {
       assert.equal(resolvedConfig?.mode, "desktop");
       assert.equal(resolvedConfig?.port, 4010);
       assert.equal(resolvedConfig?.host, "0.0.0.0");
-      assert.equal(resolvedConfig?.stateDir, path.resolve("/tmp/t3-cli-state"));
+      assert.equal(resolvedConfig?.stateDir, path.resolve("/tmp/draft-cli-state"));
       assert.equal(resolvedConfig?.devUrl?.toString(), "http://127.0.0.1:5173/");
       assert.equal(resolvedConfig?.noBrowser, true);
       assert.equal(resolvedConfig?.authToken, "auth-secret");
@@ -134,20 +134,20 @@ it.layer(testLayer)("server CLI command", (it) => {
   it.effect("uses env fallbacks when flags are not provided", () =>
     Effect.gen(function* () {
       yield* runCli([], {
-        CUT3_MODE: "desktop",
-        CUT3_PORT: "4999",
-        CUT3_HOST: "100.88.10.4",
-        CUT3_STATE_DIR: "/tmp/t3-env-state",
+        DRAFT_MODE: "desktop",
+        DRAFT_PORT: "4999",
+        DRAFT_HOST: "100.88.10.4",
+        DRAFT_STATE_DIR: "/tmp/draft-env-state",
         VITE_DEV_SERVER_URL: "http://localhost:5173",
-        CUT3_NO_BROWSER: "true",
-        CUT3_AUTH_TOKEN: "env-token",
+        DRAFT_NO_BROWSER: "true",
+        DRAFT_AUTH_TOKEN: "env-token",
       });
 
       assert.equal(start.mock.calls.length, 1);
       assert.equal(resolvedConfig?.mode, "desktop");
       assert.equal(resolvedConfig?.port, 4999);
       assert.equal(resolvedConfig?.host, "100.88.10.4");
-      assert.equal(resolvedConfig?.stateDir, path.resolve("/tmp/t3-env-state"));
+      assert.equal(resolvedConfig?.stateDir, path.resolve("/tmp/draft-env-state"));
       assert.equal(resolvedConfig?.devUrl?.toString(), "http://localhost:5173/");
       assert.equal(resolvedConfig?.noBrowser, true);
       assert.equal(resolvedConfig?.authToken, "env-token");
@@ -157,12 +157,12 @@ it.layer(testLayer)("server CLI command", (it) => {
     }),
   );
 
-  it.effect("prefers --mode over CUT3_MODE", () =>
+  it.effect("prefers --mode over DRAFT_MODE", () =>
     Effect.gen(function* () {
       findAvailablePort.mockImplementation((_preferred: number) => Effect.succeed(4666));
       yield* runCli(["--mode", "web"], {
-        CUT3_MODE: "desktop",
-        CUT3_NO_BROWSER: "true",
+        DRAFT_MODE: "desktop",
+        DRAFT_NO_BROWSER: "true",
       });
 
       assert.deepStrictEqual(findAvailablePort.mock.calls, [[3773]]);
@@ -173,10 +173,10 @@ it.layer(testLayer)("server CLI command", (it) => {
     }),
   );
 
-  it.effect("prefers --no-browser over CUT3_NO_BROWSER", () =>
+  it.effect("prefers --no-browser over DRAFT_NO_BROWSER", () =>
     Effect.gen(function* () {
       yield* runCli(["--no-browser"], {
-        CUT3_NO_BROWSER: "false",
+        DRAFT_NO_BROWSER: "false",
       });
 
       assert.equal(start.mock.calls.length, 1);
@@ -187,8 +187,8 @@ it.layer(testLayer)("server CLI command", (it) => {
   it.effect("opens a tokenized browser url when auth is enabled", () =>
     Effect.gen(function* () {
       yield* runCli([], {
-        CUT3_NO_BROWSER: "false",
-        CUT3_AUTH_TOKEN: "env-token",
+        DRAFT_NO_BROWSER: "false",
+        DRAFT_AUTH_TOKEN: "env-token",
       });
 
       assert.deepStrictEqual(openBrowser.mock.calls, [["http://127.0.0.1:3773/?token=env-token"]]);
@@ -211,8 +211,8 @@ it.layer(testLayer)("server CLI command", (it) => {
   it.effect("uses fixed localhost defaults in desktop mode", () =>
     Effect.gen(function* () {
       yield* runCli([], {
-        CUT3_MODE: "desktop",
-        CUT3_NO_BROWSER: "true",
+        DRAFT_MODE: "desktop",
+        DRAFT_NO_BROWSER: "true",
       });
 
       assert.equal(findAvailablePort.mock.calls.length, 0);
@@ -226,9 +226,9 @@ it.layer(testLayer)("server CLI command", (it) => {
   it.effect("accepts an ephemeral desktop port from the environment", () =>
     Effect.gen(function* () {
       yield* runCli([], {
-        CUT3_MODE: "desktop",
-        CUT3_PORT: "0",
-        CUT3_NO_BROWSER: "true",
+        DRAFT_MODE: "desktop",
+        DRAFT_PORT: "0",
+        DRAFT_NO_BROWSER: "true",
       });
 
       assert.equal(findAvailablePort.mock.calls.length, 0);
@@ -242,8 +242,8 @@ it.layer(testLayer)("server CLI command", (it) => {
   it.effect("allows overriding desktop host with --host", () =>
     Effect.gen(function* () {
       yield* runCli(["--host", "0.0.0.0"], {
-        CUT3_MODE: "desktop",
-        CUT3_NO_BROWSER: "true",
+        DRAFT_MODE: "desktop",
+        DRAFT_NO_BROWSER: "true",
       });
 
       assert.equal(start.mock.calls.length, 1);
@@ -255,10 +255,10 @@ it.layer(testLayer)("server CLI command", (it) => {
   it.effect("supports CLI and env for bootstrap/log websocket toggles", () =>
     Effect.gen(function* () {
       yield* runCli(["--auto-bootstrap-project-from-cwd"], {
-        CUT3_MODE: "desktop",
-        CUT3_LOG_WS_EVENTS: "false",
-        CUT3_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
-        CUT3_NO_BROWSER: "true",
+        DRAFT_MODE: "desktop",
+        DRAFT_LOG_WS_EVENTS: "false",
+        DRAFT_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
+        DRAFT_NO_BROWSER: "true",
       });
 
       assert.equal(start.mock.calls.length, 1);

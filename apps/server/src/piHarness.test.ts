@@ -8,7 +8,7 @@ import { createLockedPiSettingsManager, createPiHarnessCatalogSnapshot } from ".
 
 describe("createLockedPiSettingsManager", () => {
   it("preserves Pi runtime defaults while stripping package and resource discovery settings", () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cut3-pi-settings-"));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "draft-pi-settings-"));
     const agentDir = path.join(cwd, "agent");
     const projectPiDir = path.join(cwd, ".pi");
     fs.mkdirSync(agentDir, { recursive: true });
@@ -72,7 +72,7 @@ describe("createLockedPiSettingsManager", () => {
 
 describe("createPiHarnessCatalogSnapshot", () => {
   it("honors PI_CODING_AGENT_DIR when no explicit agentDir is passed", () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cut3-pi-catalog-"));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "draft-pi-catalog-"));
     const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
     process.env.PI_CODING_AGENT_DIR = cwd;
 

@@ -1,4 +1,4 @@
-import { OPENCODE_DEFAULT_MODEL, ThreadId } from "@t3tools/contracts";
+import { OPENCODE_DEFAULT_MODEL, ThreadId } from "@draft/contracts";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -110,7 +110,7 @@ describe("opencodeAcpManager errors", () => {
     expect(
       normalizeOpenCodeStartErrorMessage("Missing environment variable: 'OPENROUTER_API_KEY'."),
     ).toBe(
-      "OpenCode provider config requires OPENROUTER_API_KEY. Add an OpenRouter API key in CUT3 Settings or export OPENROUTER_API_KEY before starting CUT3.",
+      "OpenCode provider config requires OPENROUTER_API_KEY. Add an OpenRouter API key in Draft Settings or export OPENROUTER_API_KEY before starting Draft.",
     );
   });
 

@@ -7,7 +7,7 @@ import { type ThemeRegistrationResolved } from "@pierre/diffs";
  * Background: #000000 (true black for pixel-off battery savings)
  * Syntax palette: GitHub Dark Default token colors
  *
- * @see https://vscodethemes.com/e/T3M1N4L.amoled-github/amoled-github-theme
+ * @see upstream AMOLED GitHub theme source
  */
 
 export const AMOLED_GITHUB_THEME_NAME = "amoled-github" as const;

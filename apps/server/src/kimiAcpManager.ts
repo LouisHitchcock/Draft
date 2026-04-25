@@ -19,7 +19,7 @@ import {
   ThreadId,
   TurnId,
   type ProviderTurnStartResult,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 
 import {
   createPermissionOutcome,
@@ -120,7 +120,7 @@ export function buildKimiCliArgs(input: {
   ];
 }
 
-const KIMI_CODE_PROVIDER_ID = "cut3-kimi";
+const KIMI_CODE_PROVIDER_ID = "draft-kimi";
 const KIMI_CODE_BASE_URL = "https://api.kimi.com/coding/v1";
 const KIMI_DEFAULT_MODEL_ID = "kimi-for-coding";
 const KIMI_DEFAULT_MAX_CONTEXT_SIZE = 262_144;
@@ -200,7 +200,7 @@ function createKimiApiKeyConfigFile(input: { readonly apiKey: string; readonly m
   readonly dirPath: string;
   readonly filePath: string;
 } {
-  const dirPath = mkdtempSync(join(tmpdir(), "cut3-kimi-"));
+  const dirPath = mkdtempSync(join(tmpdir(), "draft-kimi-"));
   const filePath = join(dirPath, "config.json");
   try {
     chmodSync(dirPath, 0o700);
@@ -278,7 +278,7 @@ export function normalizeKimiStartErrorMessage(input: {
     ) ||
     (input.loginProbeOutput && isKimiLoginProbeUnauthenticated(input.loginProbeOutput))
   ) {
-    return "Kimi Code CLI requires authentication. Run `kimi login`, or start `kimi` and run `/login`, or add a Kimi API key in CUT3 Settings and try again.";
+    return "Kimi Code CLI requires authentication. Run `kimi login`, or start `kimi` and run `/login`, or add a Kimi API key in Draft Settings and try again.";
   }
 
   return input.rawMessage;
@@ -937,7 +937,7 @@ export class KimiAcpManager extends EventEmitter<KimiAcpManagerEvents> {
   }
 
   async respondToUserInput(): Promise<void> {
-    throw new Error("Kimi Code CLI does not expose structured user input requests in CUT3.");
+    throw new Error("Kimi Code CLI does not expose structured user input requests in Draft.");
   }
 
   async stopSession(threadId: ThreadId): Promise<void> {

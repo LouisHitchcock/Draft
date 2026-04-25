@@ -3,7 +3,7 @@ import type {
   OrchestrationEvent,
   OrchestrationReadModel,
   OrchestrationThread,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Effect } from "effect";
 
 import { OrchestrationCommandInvariantError } from "./Errors.ts";

@@ -11,39 +11,12 @@ import serverPackageJson from "../apps/server/package.json" with { type: "json" 
 import { BRAND_ASSET_PATHS } from "./lib/brand-assets.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
-import { resolveAppReleaseBranding } from "@t3tools/shared/appRelease";
+import { resolveAppReleaseBranding } from "@draft/shared/appRelease";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Config, Data, Effect, FileSystem, Layer, Logger, Option, Path, Schema } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-
-function syncBrandedEnv(primaryKey: string, legacyKey: string): void {
-  const primaryValue = process.env[primaryKey];
-  const legacyValue = process.env[legacyKey];
-  if (primaryValue === undefined && legacyValue !== undefined) {
-    process.env[primaryKey] = legacyValue;
-  }
-  if (legacyValue === undefined && primaryValue !== undefined) {
-    process.env[legacyKey] = primaryValue;
-  }
-}
-
-(
-  [
-    ["T4CODE_DESKTOP_PLATFORM", "CUT3_DESKTOP_PLATFORM"],
-    ["T4CODE_DESKTOP_TARGET", "CUT3_DESKTOP_TARGET"],
-    ["T4CODE_DESKTOP_ARCH", "CUT3_DESKTOP_ARCH"],
-    ["T4CODE_DESKTOP_VERSION", "CUT3_DESKTOP_VERSION"],
-    ["T4CODE_DESKTOP_OUTPUT_DIR", "CUT3_DESKTOP_OUTPUT_DIR"],
-    ["T4CODE_DESKTOP_SKIP_BUILD", "CUT3_DESKTOP_SKIP_BUILD"],
-    ["T4CODE_DESKTOP_KEEP_STAGE", "CUT3_DESKTOP_KEEP_STAGE"],
-    ["T4CODE_DESKTOP_SIGNED", "CUT3_DESKTOP_SIGNED"],
-    ["T4CODE_DESKTOP_VERBOSE", "CUT3_DESKTOP_VERBOSE"],
-    ["T4CODE_DESKTOP_UPDATE_REPOSITORY", "CUT3_DESKTOP_UPDATE_REPOSITORY"],
-    ["T4CODE_DESKTOP_UPDATE_GITHUB_TOKEN", "CUT3_DESKTOP_UPDATE_GITHUB_TOKEN"],
-  ] as const
-).forEach(([primaryKey, legacyKey]) => syncBrandedEnv(primaryKey, legacyKey));
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
 const BuildArch = Schema.Literals(["arm64", "x64", "universal"]);
@@ -196,7 +169,7 @@ interface StagePackageJson {
   readonly name: string;
   readonly version: string;
   readonly buildVersion: string;
-  readonly cut3CommitHash: string;
+  readonly draftCommitHash: string;
   readonly private: true;
   readonly description: string;
   readonly author: string;
@@ -224,15 +197,15 @@ const AzureTrustedSigningOptionsConfig = Config.all({
 });
 
 const BuildEnvConfig = Config.all({
-  platform: Config.schema(BuildPlatform, "T4CODE_DESKTOP_PLATFORM").pipe(Config.option),
-  target: Config.string("T4CODE_DESKTOP_TARGET").pipe(Config.option),
-  arch: Config.schema(BuildArch, "T4CODE_DESKTOP_ARCH").pipe(Config.option),
-  version: Config.string("T4CODE_DESKTOP_VERSION").pipe(Config.option),
-  outputDir: Config.string("T4CODE_DESKTOP_OUTPUT_DIR").pipe(Config.option),
-  skipBuild: Config.boolean("T4CODE_DESKTOP_SKIP_BUILD").pipe(Config.withDefault(false)),
-  keepStage: Config.boolean("T4CODE_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
-  signed: Config.boolean("T4CODE_DESKTOP_SIGNED").pipe(Config.withDefault(false)),
-  verbose: Config.boolean("T4CODE_DESKTOP_VERBOSE").pipe(Config.withDefault(false)),
+  platform: Config.schema(BuildPlatform, "DRAFT_DESKTOP_PLATFORM").pipe(Config.option),
+  target: Config.string("DRAFT_DESKTOP_TARGET").pipe(Config.option),
+  arch: Config.schema(BuildArch, "DRAFT_DESKTOP_ARCH").pipe(Config.option),
+  version: Config.string("DRAFT_DESKTOP_VERSION").pipe(Config.option),
+  outputDir: Config.string("DRAFT_DESKTOP_OUTPUT_DIR").pipe(Config.option),
+  skipBuild: Config.boolean("DRAFT_DESKTOP_SKIP_BUILD").pipe(Config.withDefault(false)),
+  keepStage: Config.boolean("DRAFT_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
+  signed: Config.boolean("DRAFT_DESKTOP_SIGNED").pipe(Config.withDefault(false)),
+  verbose: Config.boolean("DRAFT_DESKTOP_VERBOSE").pipe(Config.withDefault(false)),
 });
 
 const resolveBooleanFlag = (flag: Option.Option<boolean>, envValue: boolean) =>
@@ -346,7 +319,7 @@ function stageMacIcons(stageResourcesDir: string, verbose: boolean) {
     }
 
     const tmpRoot = yield* fs.makeTempDirectoryScoped({
-      prefix: "t4code-icon-build-",
+      prefix: "draft-icon-build-",
     });
 
     const iconPngPath = path.join(stageResourcesDir, "icon.png");
@@ -455,8 +428,7 @@ function resolveGitHubPublishConfig():
     }
   | undefined {
   const rawRepo =
-    process.env.T4CODE_DESKTOP_UPDATE_REPOSITORY?.trim() ||
-    process.env.CUT3_DESKTOP_UPDATE_REPOSITORY?.trim() ||
+    process.env.DRAFT_DESKTOP_UPDATE_REPOSITORY?.trim() ||
     process.env.GITHUB_REPOSITORY?.trim() ||
     "";
   if (!rawRepo) return undefined;
@@ -513,7 +485,7 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       target: [target],
       icon: "icon.png",
       category: "Development",
-      executableName: "t4code",
+      executableName: "draft",
       desktop: {
         entry: {
           StartupWMClass: productName,
@@ -618,7 +590,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const commitHash = resolveGitCommitHash(repoRoot);
   const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
   const stageRoot = yield* mkdir({
-    prefix: `t4code-desktop-${options.platform}-stage-`,
+    prefix: `draft-desktop-${options.platform}-stage-`,
   });
 
   const stageAppDir = path.join(stageRoot, "app");
@@ -672,13 +644,13 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.copy(stageResourcesDir, path.join(stageAppDir, "apps/desktop/prod-resources"));
 
   const stagePackageJson: StagePackageJson = {
-    name: "t4code-desktop",
+    name: "draft-desktop",
     version: appVersion,
     buildVersion: appVersion,
-    cut3CommitHash: commitHash,
+    draftCommitHash: commitHash,
     private: true,
     description: "Draft desktop build",
-    author: "T3 Tools",
+    author: "Draft",
     main: "apps/desktop/dist-electron/main.js",
     build: yield* createBuildConfig(
       options.platform,
@@ -784,45 +756,45 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 
 const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   platform: Flag.choice("platform", BuildPlatform.literals).pipe(
-    Flag.withDescription("Build platform (env: T4CODE_DESKTOP_PLATFORM)."),
+    Flag.withDescription("Build platform (env: DRAFT_DESKTOP_PLATFORM)."),
     Flag.optional,
   ),
   target: Flag.string("target").pipe(
     Flag.withDescription(
-      "Artifact target, for example dmg/AppImage/nsis (env: T4CODE_DESKTOP_TARGET).",
+      "Artifact target, for example dmg/AppImage/nsis (env: DRAFT_DESKTOP_TARGET).",
     ),
     Flag.optional,
   ),
   arch: Flag.choice("arch", BuildArch.literals).pipe(
-    Flag.withDescription("Build arch, for example arm64/x64/universal (env: T4CODE_DESKTOP_ARCH)."),
+    Flag.withDescription("Build arch, for example arm64/x64/universal (env: DRAFT_DESKTOP_ARCH)."),
     Flag.optional,
   ),
   buildVersion: Flag.string("build-version").pipe(
-    Flag.withDescription("Artifact version metadata (env: T4CODE_DESKTOP_VERSION)."),
+    Flag.withDescription("Artifact version metadata (env: DRAFT_DESKTOP_VERSION)."),
     Flag.optional,
   ),
   outputDir: Flag.string("output-dir").pipe(
-    Flag.withDescription("Output directory for artifacts (env: T4CODE_DESKTOP_OUTPUT_DIR)."),
+    Flag.withDescription("Output directory for artifacts (env: DRAFT_DESKTOP_OUTPUT_DIR)."),
     Flag.optional,
   ),
   skipBuild: Flag.boolean("skip-build").pipe(
     Flag.withDescription(
-      "Skip `bun run build:desktop` and use existing dist artifacts (env: T4CODE_DESKTOP_SKIP_BUILD).",
+      "Skip `bun run build:desktop` and use existing dist artifacts (env: DRAFT_DESKTOP_SKIP_BUILD).",
     ),
     Flag.optional,
   ),
   keepStage: Flag.boolean("keep-stage").pipe(
-    Flag.withDescription("Keep temporary staging files (env: T4CODE_DESKTOP_KEEP_STAGE)."),
+    Flag.withDescription("Keep temporary staging files (env: DRAFT_DESKTOP_KEEP_STAGE)."),
     Flag.optional,
   ),
   signed: Flag.boolean("signed").pipe(
     Flag.withDescription(
-      "Enable signing/notarization discovery; Windows uses Azure Trusted Signing (env: T4CODE_DESKTOP_SIGNED).",
+      "Enable signing/notarization discovery; Windows uses Azure Trusted Signing (env: DRAFT_DESKTOP_SIGNED).",
     ),
     Flag.optional,
   ),
   verbose: Flag.boolean("verbose").pipe(
-    Flag.withDescription("Stream subprocess stdout (env: T4CODE_DESKTOP_VERBOSE)."),
+    Flag.withDescription("Stream subprocess stdout (env: DRAFT_DESKTOP_VERBOSE)."),
     Flag.optional,
   ),
 }).pipe(

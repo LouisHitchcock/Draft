@@ -5,7 +5,7 @@
  * API constrained to store actions/selectors.
  */
 
-import type { ThreadId } from "@t3tools/contracts";
+import type { ThreadId } from "@draft/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import {
@@ -26,8 +26,8 @@ interface ThreadTerminalState {
   activeTerminalGroupId: string;
 }
 
-const LEGACY_TERMINAL_STATE_STORAGE_KEY = "cut3:terminal-state:v1";
-const NEXT_TERMINAL_STATE_STORAGE_KEY = "t4code:terminal-state:v1";
+const LEGACY_TERMINAL_STATE_STORAGE_KEY = "draft:terminal-state:v1";
+const NEXT_TERMINAL_STATE_STORAGE_KEY = "draft:terminal-state:v1";
 
 function createTerminalStateStorage() {
   if (typeof localStorage === "undefined") {

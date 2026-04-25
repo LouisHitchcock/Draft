@@ -1,4 +1,4 @@
-import { ThreadId } from "@t3tools/contracts";
+import { ThreadId } from "@draft/contracts";
 import { describe, expect, it, vi } from "vitest";
 
 import { CopilotAcpManager, readCopilotReasoningEffortSelector } from "./copilotAcpManager";

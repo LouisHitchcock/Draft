@@ -1,9 +1,9 @@
-const REPO = "yappologistic/t3code";
+const REPO = "LouisHitchcock/Draft";
 
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
 
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
-const CACHE_KEY = "cut3-latest-release";
+const CACHE_KEY = "draft-latest-release";
 
 export interface ReleaseAsset {
   name: string;

@@ -6,7 +6,7 @@ import {
   ThreadId,
   TurnId,
   type OrchestrationReadModel,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { describe, expect, it } from "vitest";
 
 import { markThreadUnread, reorderProjects, syncServerReadModel, type AppState } from "./store";
@@ -351,7 +351,7 @@ describe("store read model sync", () => {
     expect(next.threads[0]?.model).toBe("kimi-k2-thinking");
   });
 
-  it("preserves active Pi session models that are not part of the built-in CUT3 catalog", () => {
+  it("preserves active Pi session models that are not part of the built-in Draft catalog", () => {
     const initialState = makeState(makeThread());
     const readModel = makeReadModel(
       makeReadModelThread({

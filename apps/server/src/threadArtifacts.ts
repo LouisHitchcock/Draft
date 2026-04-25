@@ -7,7 +7,7 @@ import {
   type OrchestrationThreadActivity,
   ThreadId,
   type ThreadShareSnapshot,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Schema } from "effect";
 
 export const THREAD_RESUME_CONTEXT_ACTIVITY_KIND = "thread.resume-context.updated";

@@ -9,7 +9,7 @@ import pkg from "./package.json" with { type: "json" };
 const webRoot = fileURLToPath(new URL(".", import.meta.url));
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const port = Number(process.env.PORT ?? 5733);
-const sourcemapEnv = (process.env.T4CODE_WEB_SOURCEMAP ?? process.env.CUT3_WEB_SOURCEMAP)
+const sourcemapEnv = (process.env.DRAFT_WEB_SOURCEMAP ?? process.env.DRAFT_WEB_SOURCEMAP)
   ?.trim()
   .toLowerCase();
 const devUrlEnv = process.env.VITE_DEV_SERVER_URL?.trim();

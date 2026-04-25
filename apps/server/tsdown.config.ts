@@ -8,7 +8,7 @@ const INLINE_DEPENDENCY_PREFIXES = [
   "@effect/",
   "@mariozechner/pi-coding-agent",
   "@pierre/diffs",
-  "@t3tools/",
+  "@draft/",
   "effect",
   "open",
   "ws",

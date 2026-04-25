@@ -5,13 +5,13 @@ import {
   ThreadId,
   type OrchestrationReadModel,
   type OrchestrationSessionStatus,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import {
   isKnownModelSlug,
   isLegacyModelSlug,
   normalizeModelSlug,
   resolveModelSlugForProvider,
-} from "@t3tools/shared/model";
+} from "@draft/shared/model";
 import { create } from "zustand";
 import { type ChatMessage, type Project, type Thread } from "./types";
 import { Debouncer } from "@tanstack/react-pacer";
@@ -25,14 +25,14 @@ export interface AppState {
   threadsHydrated: boolean;
 }
 
-const PERSISTED_STATE_KEY = "t4code:renderer-state:v8";
+const PERSISTED_STATE_KEY = "draft:renderer-state:v8";
 const LEGACY_PERSISTED_STATE_KEYS = [
-  "cut3:renderer-state:v8",
-  "cut3:renderer-state:v7",
-  "cut3:renderer-state:v6",
-  "cut3:renderer-state:v5",
-  "cut3:renderer-state:v4",
-  "cut3:renderer-state:v3",
+  "draft:renderer-state:v8",
+  "draft:renderer-state:v7",
+  "draft:renderer-state:v6",
+  "draft:renderer-state:v5",
+  "draft:renderer-state:v4",
+  "draft:renderer-state:v3",
   "codething:renderer-state:v4",
   "codething:renderer-state:v3",
   "codething:renderer-state:v2",

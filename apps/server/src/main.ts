@@ -8,9 +8,9 @@
  */
 import { Config, Data, Effect, FileSystem, Layer, Option, Path, Schema, ServiceMap } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
-import { formatDesktopBackendReadyLine } from "@t3tools/shared/desktopBackend";
-import { NetService } from "@t3tools/shared/Net";
-import { redactWsAuthToken, withWsAuthToken } from "@t3tools/shared/wsAuth";
+import { formatDesktopBackendReadyLine } from "@draft/shared/desktopBackend";
+import { NetService } from "@draft/shared/Net";
+import { redactWsAuthToken, withWsAuthToken } from "@draft/shared/wsAuth";
 import {
   DEFAULT_PORT,
   resolveStaticDir,
@@ -34,39 +34,6 @@ export class StartupError extends Data.TaggedError("StartupError")<{
   readonly message: string;
   readonly cause?: unknown;
 }> {}
-
-function applyBrandedEnvAliases(...suffixes: string[]): void {
-  for (const suffix of suffixes) {
-    const nextKey = `T4CODE_${suffix}`;
-    const legacyKey = `CUT3_${suffix}`;
-    const nextValue = process.env[nextKey];
-    const legacyValue = process.env[legacyKey];
-    if (nextValue === undefined && legacyValue !== undefined) {
-      process.env[nextKey] = legacyValue;
-    }
-    if (legacyValue === undefined && nextValue !== undefined) {
-      process.env[legacyKey] = nextValue;
-    }
-  }
-}
-
-applyBrandedEnvAliases(
-  "MODE",
-  "PORT",
-  "HOST",
-  "STATE_DIR",
-  "NO_BROWSER",
-  "AUTH_TOKEN",
-  "AUTO_BOOTSTRAP_PROJECT_FROM_CWD",
-  "LOG_WS_EVENTS",
-  "ENABLE_PROVIDER_EVENT_LOGS",
-  "STRICT_PROVIDER_LIFECYCLE_GUARD",
-  "POSTHOG_KEY",
-  "POSTHOG_HOST",
-  "TELEMETRY_ENABLED",
-  "TELEMETRY_FLUSH_BATCH_SIZE",
-  "TELEMETRY_MAX_BUFFERED_EVENTS",
-);
 
 interface CliInput {
   readonly mode: Option.Option<RuntimeMode>;
@@ -104,7 +71,7 @@ export interface CliConfigShape {
  * CliConfig - Service tag for startup CLI/runtime helpers.
  */
 export class CliConfig extends ServiceMap.Service<CliConfig, CliConfigShape>()(
-  "t4code/main/CliConfig",
+  "draft/main/CliConfig",
 ) {
   static readonly layer = Layer.effect(
     CliConfig,
@@ -124,7 +91,7 @@ export class CliConfig extends ServiceMap.Service<CliConfig, CliConfigShape>()(
 }
 
 const CliEnvConfig = Config.all({
-  mode: Config.string("CUT3_MODE").pipe(
+  mode: Config.string("DRAFT_MODE").pipe(
     Config.option,
     Config.map(
       Option.match<RuntimeMode, string>({
@@ -133,26 +100,26 @@ const CliEnvConfig = Config.all({
       }),
     ),
   ),
-  port: Config.number("CUT3_PORT").pipe(
+  port: Config.number("DRAFT_PORT").pipe(
     Config.option,
     Config.map(Option.match({ onNone: () => undefined, onSome: (value) => value })),
   ),
-  host: Config.string("CUT3_HOST").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  stateDir: Config.string("CUT3_STATE_DIR").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  host: Config.string("DRAFT_HOST").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  stateDir: Config.string("DRAFT_STATE_DIR").pipe(Config.option, Config.map(Option.getOrUndefined)),
   devUrl: Config.url("VITE_DEV_SERVER_URL").pipe(Config.option, Config.map(Option.getOrUndefined)),
-  noBrowser: Config.boolean("CUT3_NO_BROWSER").pipe(
+  noBrowser: Config.boolean("DRAFT_NO_BROWSER").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
-  authToken: Config.string("CUT3_AUTH_TOKEN").pipe(
+  authToken: Config.string("DRAFT_AUTH_TOKEN").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
-  autoBootstrapProjectFromCwd: Config.boolean("CUT3_AUTO_BOOTSTRAP_PROJECT_FROM_CWD").pipe(
+  autoBootstrapProjectFromCwd: Config.boolean("DRAFT_AUTO_BOOTSTRAP_PROJECT_FROM_CWD").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
-  logWebSocketEvents: Config.boolean("CUT3_LOG_WS_EVENTS").pipe(
+  logWebSocketEvents: Config.boolean("DRAFT_LOG_WS_EVENTS").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
@@ -309,7 +276,7 @@ const makeServerProgram = (input: CliInput) =>
         ? `http://${formatHostForUrl(config.host)}:${listeningPort}`
         : localUrl;
     const { authToken, devUrl, ...safeConfig } = config;
-    yield* Effect.logInfo("CUT3 running", {
+    yield* Effect.logInfo("Draft running", {
       ...safeConfig,
       devUrl: devUrl?.toString(),
       authEnabled: Boolean(authToken),
@@ -348,7 +315,7 @@ const hostFlag = Flag.string("host").pipe(
   Flag.optional,
 );
 const stateDirFlag = Flag.string("state-dir").pipe(
-  Flag.withDescription("State directory path (equivalent to CUT3_STATE_DIR)."),
+  Flag.withDescription("State directory path (equivalent to DRAFT_STATE_DIR)."),
   Flag.optional,
 );
 const devUrlFlag = Flag.string("dev-url").pipe(
@@ -373,7 +340,7 @@ const autoBootstrapProjectFromCwdFlag = Flag.boolean("auto-bootstrap-project-fro
 );
 const logWebSocketEventsFlag = Flag.boolean("log-websocket-events").pipe(
   Flag.withDescription(
-    "Emit server-side logs for outbound WebSocket push traffic (equivalent to CUT3_LOG_WS_EVENTS).",
+    "Emit server-side logs for outbound WebSocket push traffic (equivalent to DRAFT_LOG_WS_EVENTS).",
   ),
   Flag.withAlias("log-ws-events"),
   Flag.optional,
@@ -390,6 +357,6 @@ export const t3Cli = Command.make("t3", {
   autoBootstrapProjectFromCwd: autoBootstrapProjectFromCwdFlag,
   logWebSocketEvents: logWebSocketEventsFlag,
 }).pipe(
-  Command.withDescription("Run the CUT3 server."),
+  Command.withDescription("Run the Draft server."),
   Command.withHandler((input) => Effect.scoped(makeServerProgram(input))),
 );

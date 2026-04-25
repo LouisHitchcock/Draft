@@ -1,4 +1,4 @@
-import type { GitStackedAction, GitStatusResult, ThreadId } from "@t3tools/contracts";
+import type { GitStackedAction, GitStatusResult, ThreadId } from "@draft/contracts";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDownIcon, CloudUploadIcon, GitCommitIcon, InfoIcon } from "lucide-react";
@@ -63,7 +63,7 @@ interface PendingDefaultBranchAction {
 }
 
 type GitActionToastId = ReturnType<typeof toastManager.add>;
-const PREFERRED_REMOTE_NAME = "CUT3";
+const PREFERRED_REMOTE_NAME = "Draft";
 
 function getGitActionsUiCopy(language: AppLanguage) {
   if (language === "fa") {

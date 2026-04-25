@@ -6,7 +6,7 @@
  *
  * @module ProjectionProjectRepository
  */
-import { IsoDateTime, ProjectId, ProjectScript } from "@t3tools/contracts";
+import { IsoDateTime, ProjectId, ProjectScript } from "@draft/contracts";
 import { Option, Schema, ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -76,4 +76,4 @@ export interface ProjectionProjectRepositoryShape {
 export class ProjectionProjectRepository extends ServiceMap.Service<
   ProjectionProjectRepository,
   ProjectionProjectRepositoryShape
->()("t4code/persistence/Services/ProjectionProjects/ProjectionProjectRepository") {}
+>()("draft/persistence/Services/ProjectionProjects/ProjectionProjectRepository") {}

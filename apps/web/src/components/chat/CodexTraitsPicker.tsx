@@ -1,5 +1,5 @@
-import { type CodexReasoningEffort } from "@t3tools/contracts";
-import { getDefaultReasoningEffort } from "@t3tools/shared/model";
+import { type CodexReasoningEffort } from "@draft/contracts";
+import { getDefaultReasoningEffort } from "@draft/shared/model";
 import { memo, useState } from "react";
 import { ChevronDownIcon } from "lucide-react";
 import { Button } from "../ui/button";

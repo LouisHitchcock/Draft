@@ -3,7 +3,7 @@ import type {
   ServerMcpServerAuthStatus,
   ServerMcpServerStatus,
   ServerProviderMcpStatus,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 
 export interface ComposerMcpServerItemData {
   readonly id: string;

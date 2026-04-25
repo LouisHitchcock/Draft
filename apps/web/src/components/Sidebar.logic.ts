@@ -10,7 +10,7 @@ import {
   type SidebarArchiveFilterMode,
   type SidebarProjectSortMode,
 } from "../lib/threadOrdering";
-import type { ProjectId, ThreadId } from "@t3tools/contracts";
+import type { ProjectId, ThreadId } from "@draft/contracts";
 
 export const THREAD_SELECTION_SAFE_SELECTOR = "[data-thread-item], [data-thread-selection-safe]";
 export type SidebarNewThreadEnvMode = "local" | "worktree";

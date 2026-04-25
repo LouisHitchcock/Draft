@@ -1,14 +1,13 @@
 {
-  "name": "t4code",
+  "name": "draft",
   "version": "1.0.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yappologistic/t3code",
+    "url": "https://github.com/LouisHitchcock/Draft",
     "directory": "apps/server"
   },
   "bin": {
-    "cut3": "./dist/index.mjs",
-    "t4code": "./dist/index.mjs"
+    "draft": "./dist/index.mjs"
   },
   "files": [
     "dist"
@@ -37,9 +36,9 @@
   "devDependencies": {
     "@effect/language-service": "catalog:",
     "@effect/vitest": "catalog:",
-    "@t3tools/contracts": "workspace:*",
-    "@t3tools/shared": "workspace:*",
-    "@t3tools/web": "workspace:*",
+    "@draft/contracts": "workspace:*",
+    "@draft/shared": "workspace:*",
+    "@draft/web": "workspace:*",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "@types/ws": "^8.5.13",

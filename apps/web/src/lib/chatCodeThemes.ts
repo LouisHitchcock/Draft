@@ -4,26 +4,26 @@ import { type AppliedCustomThemeId } from "./customThemes";
 import { ALL_DIFF_THEME_NAMES, resolveDiffThemeName, type DiffThemeName } from "./diffRendering";
 import { ensureSharedHighlighterThemesRegistered } from "./highlighterThemeRegistry";
 
-export const T3_CHAT_CODE_THEME_NAME = "t3-chat-code-dark" as const;
-export const T3_CHAT_CODE_THEME_BACKGROUND = "#1a1821" as const;
-export const T3_CHAT_CODE_THEME_FOREGROUND = "#a5a1b0" as const;
+export const DRAFT_CHAT_CODE_THEME_NAME = "draft-chat-code-dark" as const;
+export const DRAFT_CHAT_CODE_THEME_BACKGROUND = "#1a1821" as const;
+export const DRAFT_CHAT_CODE_THEME_FOREGROUND = "#a5a1b0" as const;
 
-export type ChatCodeThemeName = DiffThemeName | typeof T3_CHAT_CODE_THEME_NAME;
+export type ChatCodeThemeName = DiffThemeName | typeof DRAFT_CHAT_CODE_THEME_NAME;
 
-const T3_CHAT_CODE_THEME = {
-  name: T3_CHAT_CODE_THEME_NAME,
+const DRAFT_CHAT_CODE_THEME = {
+  name: DRAFT_CHAT_CODE_THEME_NAME,
   type: "dark",
   colors: {
-    "editor.background": T3_CHAT_CODE_THEME_BACKGROUND,
-    "editor.foreground": T3_CHAT_CODE_THEME_FOREGROUND,
+    "editor.background": DRAFT_CHAT_CODE_THEME_BACKGROUND,
+    "editor.foreground": DRAFT_CHAT_CODE_THEME_FOREGROUND,
   },
-  fg: T3_CHAT_CODE_THEME_FOREGROUND,
-  bg: T3_CHAT_CODE_THEME_BACKGROUND,
+  fg: DRAFT_CHAT_CODE_THEME_FOREGROUND,
+  bg: DRAFT_CHAT_CODE_THEME_BACKGROUND,
   settings: [
     {
       settings: {
-        foreground: T3_CHAT_CODE_THEME_FOREGROUND,
-        background: T3_CHAT_CODE_THEME_BACKGROUND,
+        foreground: DRAFT_CHAT_CODE_THEME_FOREGROUND,
+        background: DRAFT_CHAT_CODE_THEME_BACKGROUND,
       },
     },
     {
@@ -118,7 +118,7 @@ export function ensureChatCodeThemesRegistered(): void {
   }
 
   ensureSharedHighlighterThemesRegistered();
-  registerCustomTheme(T3_CHAT_CODE_THEME_NAME, () => Promise.resolve(T3_CHAT_CODE_THEME));
+  registerCustomTheme(DRAFT_CHAT_CODE_THEME_NAME, () => Promise.resolve(DRAFT_CHAT_CODE_THEME));
   chatCodeThemesRegistered = true;
 }
 
@@ -126,15 +126,15 @@ ensureChatCodeThemesRegistered();
 
 export const ALL_CHAT_CODE_THEME_NAMES = [
   ...ALL_DIFF_THEME_NAMES,
-  T3_CHAT_CODE_THEME_NAME,
+  DRAFT_CHAT_CODE_THEME_NAME,
 ] as const satisfies readonly ChatCodeThemeName[];
 
 export function resolveChatCodeThemeName(
   theme: "light" | "dark",
   activeCustomThemeId: AppliedCustomThemeId | null = null,
 ): ChatCodeThemeName {
-  if (activeCustomThemeId === "t3-chat-theme") {
-    return T3_CHAT_CODE_THEME_NAME;
+  if (activeCustomThemeId === "draft-chat-theme") {
+    return DRAFT_CHAT_CODE_THEME_NAME;
   }
 
   return resolveDiffThemeName(theme, activeCustomThemeId);

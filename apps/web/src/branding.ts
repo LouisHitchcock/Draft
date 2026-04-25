@@ -1,4 +1,4 @@
-import { resolveAppReleaseBranding } from "@t3tools/shared/appRelease";
+import { resolveAppReleaseBranding } from "@draft/shared/appRelease";
 
 export const APP_BASE_NAME = "Draft";
 export const APP_VERSION = import.meta.env.APP_VERSION || "0.0.0";

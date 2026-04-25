@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   extractOpenRouterFreeModels,
-  isCut3CompatibleOpenRouterModelOption,
+  isDraftCompatibleOpenRouterModelOption,
   isOpenRouterGuaranteedFreeSlug,
   isOpenRouterFreeModelEntry,
   OPENROUTER_MODELS_API_URL,
@@ -132,7 +132,7 @@ describe("openRouterModels", () => {
     ]);
   });
 
-  it("only keeps explicit free variants with full native tool-calling support in the CUT3 picker", () => {
+  it("only keeps explicit free variants with full native tool-calling support in the Draft picker", () => {
     const models = extractOpenRouterFreeModels({
       data: [
         {
@@ -168,7 +168,7 @@ describe("openRouterModels", () => {
       ],
     });
 
-    expect(models.filter(isCut3CompatibleOpenRouterModelOption).map((model) => model.slug)).toEqual(
+    expect(models.filter(isDraftCompatibleOpenRouterModelOption).map((model) => model.slug)).toEqual(
       ["openrouter/free", "openai/gpt-oss-120b:free"],
     );
   });
@@ -230,7 +230,7 @@ describe("openRouterModels", () => {
   it("reuses the last known-good catalog when the live fetch fails", async () => {
     const storage = new Map<string, string>();
     storage.set(
-      "cut3:openrouter-free-models-cache:v1",
+      "draft:openrouter-free-models-cache:v1",
       JSON.stringify({
         fetchedAt: "2026-03-27T10:00:00.000Z",
         models: [

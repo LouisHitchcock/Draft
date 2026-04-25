@@ -3,8 +3,8 @@ import {
   type ProviderKind,
   RuntimeMode,
   ProviderInteractionMode,
-} from "@t3tools/contracts";
-import { getDefaultReasoningEffort } from "@t3tools/shared/model";
+} from "@draft/contracts";
+import { getDefaultReasoningEffort } from "@draft/shared/model";
 import { memo } from "react";
 import { EllipsisIcon, ListTodoIcon } from "lucide-react";
 import { Button } from "../ui/button";

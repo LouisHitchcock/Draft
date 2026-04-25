@@ -1,4 +1,4 @@
-import { getWsAuthToken, withoutWsAuthToken, withWsAuthToken } from "@t3tools/shared/wsAuth";
+import { getWsAuthToken, withoutWsAuthToken, withWsAuthToken } from "@draft/shared/wsAuth";
 
 let cachedLocationAuthToken: string | null | undefined;
 let cachedLocationAuthSearch = "";

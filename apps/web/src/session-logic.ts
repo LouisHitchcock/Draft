@@ -11,8 +11,8 @@ import {
   type ToolLifecycleItemType,
   type UserInputQuestion,
   type TurnId,
-} from "@t3tools/contracts";
-import { getModelDisplayName, isCodexOpenRouterModel } from "@t3tools/shared/model";
+} from "@draft/contracts";
+import { getModelDisplayName, isCodexOpenRouterModel } from "@draft/shared/model";
 
 import type {
   ChatMessage,

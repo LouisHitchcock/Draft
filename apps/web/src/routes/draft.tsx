@@ -9,8 +9,8 @@ import {
   type EditorId,
   type ResolvedKeybindingsConfig,
   ThreadId,
-} from "@t3tools/contracts";
-import { resolveModelSlugForProvider } from "@t3tools/shared/model";
+} from "@draft/contracts";
+import { resolveModelSlugForProvider } from "@draft/shared/model";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {

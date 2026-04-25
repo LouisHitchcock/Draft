@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/contracts",
+  "name": "@draft/contracts",
   "version": "1.0.1",
   "private": true,
   "files": [
@@ -17,8 +17,8 @@
     }
   },
   "scripts": {
-    "dev": "tsdown src/index.ts --format esm,cjs --dts --watch --clean",
-    "build": "tsdown src/index.ts --format esm,cjs --dts --clean",
+    "dev": "tsdown src/index.ts --format esm,cjs --no-dts --watch --clean",
+    "build": "tsdown src/index.ts --format esm,cjs --no-dts --clean",
     "prepare": "effect-language-service patch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

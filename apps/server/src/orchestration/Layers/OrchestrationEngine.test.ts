@@ -8,7 +8,7 @@ import {
   ThreadId,
   TurnId,
   type OrchestrationEvent,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Effect, Fiber, Layer, ManagedRuntime, Stream } from "effect";
 import { describe, expect, it } from "vitest";
 

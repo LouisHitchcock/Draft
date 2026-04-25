@@ -1,4 +1,4 @@
-import type { ProviderKind } from "@t3tools/contracts";
+import type { ProviderKind } from "@draft/contracts";
 
 import {
   doesThreadContextUsageSnapshotMatchSelection,

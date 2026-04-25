@@ -5,7 +5,7 @@ import {
   type OrchestrationThreadRestoreState,
   OrchestrationThreadRestoreState as OrchestrationThreadRestoreStateSchema,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Schema } from "effect";
 
 import { readStateJsonFile, writeStateJsonFile } from "./stateJsonFile.ts";

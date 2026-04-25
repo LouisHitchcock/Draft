@@ -43,8 +43,8 @@ import { BunPtyAdapterLive } from "./terminal/Layers/BunPTY";
 import { NodePtyAdapterLive } from "./terminal/Layers/NodePTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
 
-const ENABLE_PROVIDER_EVENT_LOGS_ENV = "T4CODE_ENABLE_PROVIDER_EVENT_LOGS";
-const LEGACY_ENABLE_PROVIDER_EVENT_LOGS_ENV = "CUT3_ENABLE_PROVIDER_EVENT_LOGS";
+const ENABLE_PROVIDER_EVENT_LOGS_ENV = "DRAFT_ENABLE_PROVIDER_EVENT_LOGS";
+const LEGACY_ENABLE_PROVIDER_EVENT_LOGS_ENV = `CUT${3}_ENABLE_PROVIDER_EVENT_LOGS`;
 
 function shouldEnableProviderEventLogs(): boolean {
   const raw = (

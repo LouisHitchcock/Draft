@@ -1,5 +1,5 @@
-import type { DesktopUpdateState } from "@t3tools/contracts";
-import { getVersionPrereleaseTag } from "@t3tools/shared/appRelease";
+import type { DesktopUpdateState } from "@draft/contracts";
+import { getVersionPrereleaseTag } from "@draft/shared/appRelease";
 
 const DEFAULT_DESKTOP_UPDATE_CHANNEL = "latest";
 
@@ -42,7 +42,7 @@ export function getAutoUpdateDisabledReason(args: {
     return "Automatic updates are only available in packaged production builds.";
   }
   if (args.disabledByEnv) {
-    return "Automatic updates are disabled by the T4CODE_DISABLE_AUTO_UPDATE setting.";
+    return "Automatic updates are disabled by the DRAFT_DISABLE_AUTO_UPDATE setting.";
   }
   if (args.platform === "linux" && !args.appImage) {
     return "Automatic updates on Linux require running the AppImage build.";

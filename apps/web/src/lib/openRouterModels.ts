@@ -1,4 +1,4 @@
-import { OPENROUTER_FREE_ROUTER_MODEL } from "@t3tools/contracts";
+import { OPENROUTER_FREE_ROUTER_MODEL } from "@draft/contracts";
 
 export const OPENROUTER_MODELS_API_URL = "https://openrouter.ai/api/v1/models";
 const OPENROUTER_MODELS_FETCH_TIMEOUT_MS = 4_000;
@@ -30,8 +30,8 @@ export type OpenRouterFreeModelCatalog =
       readonly models: ReadonlyArray<OpenRouterFreeModelOption>;
     };
 
-const OPENROUTER_FREE_MODEL_CACHE_STORAGE_KEY = "t4code:openrouter-free-models-cache:v1";
-const LEGACY_OPENROUTER_FREE_MODEL_CACHE_STORAGE_KEY = "cut3:openrouter-free-models-cache:v1";
+const OPENROUTER_FREE_MODEL_CACHE_STORAGE_KEY = "draft:openrouter-free-models-cache:v1";
+const LEGACY_OPENROUTER_FREE_MODEL_CACHE_STORAGE_KEY = "draft:openrouter-free-models-cache:v1";
 
 export const OPENROUTER_FREE_ROUTER_OPTION: OpenRouterFreeModelOption = {
   slug: OPENROUTER_FREE_ROUTER_MODEL,
@@ -61,7 +61,7 @@ export function supportsOpenRouterNativeToolCalling(
   return model?.supportsTools === true && model.supportsToolChoice === true;
 }
 
-export function isCut3CompatibleOpenRouterModelOption(model: OpenRouterFreeModelOption): boolean {
+export function isDraftCompatibleOpenRouterModelOption(model: OpenRouterFreeModelOption): boolean {
   return isOpenRouterGuaranteedFreeSlug(model.slug) && supportsOpenRouterNativeToolCalling(model);
 }
 
@@ -69,7 +69,7 @@ export function supportsOpenRouterReasoningEffortControl(
   _model: OpenRouterFreeModelOption | null | undefined,
 ): boolean {
   // OpenRouter's public catalog currently tells us whether a model supports reasoning,
-  // but not which effort levels are valid. T4Code should not send Codex-specific effort
+  // but not which effort levels are valid. Draft should not send Codex-specific effort
   // values for OpenRouter models until that metadata is available.
   return false;
 }

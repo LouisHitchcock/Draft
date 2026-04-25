@@ -11,7 +11,7 @@ import {
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
-import { ApprovalRequestId, ThreadId, TurnId, type PiThinkingLevel } from "@t3tools/contracts";
+import { ApprovalRequestId, ThreadId, TurnId, type PiThinkingLevel } from "@draft/contracts";
 
 import { PiSdkManager } from "./piSdkManager.ts";
 
@@ -147,7 +147,7 @@ async function flushMicrotasks() {
 
 describe("PiSdkManager", () => {
   it("emits turn.started before the background prompt completes", async () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cut3-pi-manager-"));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "draft-pi-manager-"));
     const deps = createSessionDependencies(cwd);
     const fakeSession = new FakeAgentSession(deps.model);
     let finishPrompt: (() => void) | undefined;
@@ -218,7 +218,7 @@ describe("PiSdkManager", () => {
   });
 
   it("applies Pi thinking levels and reports the effective options in session.configured", async () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cut3-pi-manager-thinking-"));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "draft-pi-manager-thinking-"));
     const deps = createSessionDependencies(cwd);
     const fakeSession = new FakeAgentSession(deps.model, [
       "off",
@@ -269,7 +269,7 @@ describe("PiSdkManager", () => {
   });
 
   it("clamps unsupported Pi thinking levels during turn submission and re-emits config", async () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cut3-pi-manager-thinking-turn-"));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "draft-pi-manager-thinking-turn-"));
     const deps = createSessionDependencies(cwd);
     const fakeSession = new FakeAgentSession(deps.model, [
       "off",
@@ -333,8 +333,8 @@ describe("PiSdkManager", () => {
     });
   });
 
-  it("opens and resolves CUT3 approvals around Pi tool execution", async () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cut3-pi-manager-approval-"));
+  it("opens and resolves Draft approvals around Pi tool execution", async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "draft-pi-manager-approval-"));
     fs.writeFileSync(path.join(cwd, "README.md"), "# hello\n", "utf8");
     const deps = createSessionDependencies(cwd);
     const fakeSession = new FakeAgentSession(deps.model);
@@ -441,7 +441,7 @@ describe("PiSdkManager", () => {
   });
 
   it("keeps the replacement Pi session registered after disposing the previous one", async () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cut3-pi-manager-replace-"));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "draft-pi-manager-replace-"));
     const deps = createSessionDependencies(cwd);
     const firstSession = new FakeAgentSession(deps.model);
     const secondSession = new FakeAgentSession(deps.model);
@@ -500,7 +500,7 @@ describe("PiSdkManager", () => {
   });
 
   it("blocks duplicate Pi session starts before createContext resolves", async () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cut3-pi-manager-starting-"));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "draft-pi-manager-starting-"));
     const deps = createSessionDependencies(cwd);
     const fakeSession = new FakeAgentSession(deps.model);
 
@@ -552,7 +552,7 @@ describe("PiSdkManager", () => {
   });
 
   it("ignores stale interrupt requests that target an older Pi turn id", async () => {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "cut3-pi-manager-interrupt-"));
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "draft-pi-manager-interrupt-"));
     const deps = createSessionDependencies(cwd);
     const fakeSession = new FakeAgentSession(deps.model);
     let finishPrompt: (() => void) | undefined;

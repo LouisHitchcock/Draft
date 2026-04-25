@@ -1,4 +1,4 @@
-import type { ProviderStartOptions } from "@t3tools/contracts";
+import type { ProviderStartOptions } from "@draft/contracts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);

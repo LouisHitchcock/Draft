@@ -1,4 +1,4 @@
-import { ApprovalRequestId, ProjectId } from "@t3tools/contracts";
+import { ApprovalRequestId, ProjectId } from "@draft/contracts";
 import { describe, expect, it } from "vitest";
 
 import {

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type { OrchestrationReadModel, ProviderRuntimeEvent } from "@t3tools/contracts";
+import type { OrchestrationReadModel, ProviderRuntimeEvent } from "@draft/contracts";
 import {
   ApprovalRequestId,
   CommandId,
@@ -13,7 +13,7 @@ import {
   ProviderItemId,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Effect, Exit, Layer, ManagedRuntime, PubSub, Scope, Stream } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -734,7 +734,7 @@ describe("ProviderRuntimeIngestion", () => {
       itemId: asItemId("item-command-output"),
       payload: {
         streamKind: "command_output",
-        delta: "C:\\\\Users\\\\Louis\\\\Desktop\\\\Code\\\\T4-Code\n",
+        delta: "C:\\\\Users\\\\Louis\\\\Desktop\\\\Code\\\\Draft\n",
       },
     });
     harness.emit({
@@ -800,12 +800,12 @@ describe("ProviderRuntimeIngestion", () => {
     expect(activity?.kind).toBe("tool.completed");
     expect(payload?.itemType).toBe("command_execution");
     expect(payload?.detail).toBe('cmd /c "echo shell=cmd && cd"');
-    expect(result?.output).toBe("shell=cmd\nC:\\\\Users\\\\Louis\\\\Desktop\\\\Code\\\\T4-Code");
+    expect(result?.output).toBe("shell=cmd\nC:\\\\Users\\\\Louis\\\\Desktop\\\\Code\\\\Draft");
     expect(streamingActivity?.kind).toBe("command.output.streaming");
     expect(streamingPayload?.itemType).toBe("command_execution");
     expect(typeof streamingResult?.output).toBe("string");
     expect(String(streamingResult?.output)).toContain("shell=cmd");
-    expect(String(streamingResult?.output)).toContain("T4-Code");
+    expect(String(streamingResult?.output)).toContain("Draft");
   });
 
   it("projects completed plan items into first-class proposed plans", async () => {

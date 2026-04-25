@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ApprovalRequestId, ThreadId, TurnId } from "@t3tools/contracts";
+import { ApprovalRequestId, ThreadId, TurnId } from "@draft/contracts";
 
 import {
   buildCodexAppServerArgs,
@@ -905,8 +905,8 @@ describe("startSession", () => {
   it("enables Codex experimental api capabilities during initialize", () => {
     expect(buildCodexInitializeParams()).toEqual({
       clientInfo: {
-        name: "cut3_desktop",
-        title: "CUT3 Desktop",
+        name: "draft_desktop",
+        title: "Draft Desktop",
         version: "0.1.0",
       },
       capabilities: {
@@ -973,7 +973,7 @@ describe("startSession", () => {
       )
       .mockImplementation(() => {
         throw new Error(
-          "Codex CLI v0.36.0 is too old for CUT3. Upgrade to v0.37.0 or newer and restart CUT3.",
+          "Codex CLI v0.36.0 is too old for Draft. Upgrade to v0.37.0 or newer and restart Draft.",
         );
       });
 
@@ -985,7 +985,7 @@ describe("startSession", () => {
           runtimeMode: "full-access",
         }),
       ).rejects.toThrow(
-        "Codex CLI v0.36.0 is too old for CUT3. Upgrade to v0.37.0 or newer and restart CUT3.",
+        "Codex CLI v0.36.0 is too old for Draft. Upgrade to v0.37.0 or newer and restart Draft.",
       );
       expect(versionCheck).toHaveBeenCalledTimes(1);
       expect(events).toEqual([
@@ -993,7 +993,7 @@ describe("startSession", () => {
           method: "session/startFailed",
           kind: "error",
           message:
-            "Codex CLI v0.36.0 is too old for CUT3. Upgrade to v0.37.0 or newer and restart CUT3.",
+            "Codex CLI v0.36.0 is too old for Draft. Upgrade to v0.37.0 or newer and restart Draft.",
         },
       ]);
     } finally {
@@ -1013,7 +1013,7 @@ describe("startSession", () => {
       });
     });
 
-    const tempDir = mkdtempSync(path.join(os.tmpdir(), "cut3-codex-failfast-"));
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "draft-codex-failfast-"));
     const fakeBinaryPath = path.join(
       tempDir,
       process.platform === "win32" ? "fake-codex.cmd" : "fake-codex",

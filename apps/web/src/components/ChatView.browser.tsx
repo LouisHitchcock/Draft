@@ -17,7 +17,7 @@ import {
   WS_CHANNELS,
   WS_METHODS,
   OrchestrationSessionStatus,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { HttpResponse, http, ws } from "msw";
 import { setupWorker } from "msw/browser";
@@ -31,7 +31,7 @@ import { isMacPlatform } from "../lib/utils";
 import { getRouter } from "../router";
 import { useStore } from "../store";
 import { estimateTimelineMessageHeight } from "./timelineHeight";
-import { buildBangCommandTerminalId } from "@t3tools/shared/terminalRun";
+import { buildBangCommandTerminalId } from "@draft/shared/terminalRun";
 
 const THREAD_ID = "thread-browser-test" as ThreadId;
 const UUID_ROUTE_RE = /^\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -39,7 +39,7 @@ const PROJECT_ID = "project-1" as ProjectId;
 const NOW_ISO = "2026-03-04T12:00:00.000Z";
 const BASE_TIME_MS = Date.parse(NOW_ISO);
 const ATTACHMENT_SVG = "<svg xmlns='http://www.w3.org/2000/svg' width='120' height='300'></svg>";
-const APP_SETTINGS_STORAGE_KEY = "cut3:app-settings:v1";
+const APP_SETTINGS_STORAGE_KEY = "draft:app-settings:v1";
 const CHAT_BACKGROUND_TEST_DATA_URL =
   "data:image/svg+xml," +
   encodeURIComponent(
@@ -135,7 +135,7 @@ function isoAt(offsetSeconds: number): string {
 function createBaseServerConfig(): ServerConfig {
   return {
     cwd: "/repo/project",
-    keybindingsConfigPath: "/repo/project/.cut3-keybindings.json",
+    keybindingsConfigPath: "/repo/project/.draft-keybindings.json",
     keybindings: [],
     issues: [],
     providers: [

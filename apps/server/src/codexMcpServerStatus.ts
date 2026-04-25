@@ -3,7 +3,7 @@ import readline from "node:readline";
 import os from "node:os";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
-import type { ServerMcpServerAuthStatus, ServerMcpServerStatus } from "@t3tools/contracts";
+import type { ServerMcpServerAuthStatus, ServerMcpServerStatus } from "@draft/contracts";
 import { buildCodexInitializeParams } from "./codexAppServerManager";
 
 const DEFAULT_CODEX_BINARY = "codex";

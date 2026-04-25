@@ -1,14 +1,14 @@
 # Keybindings
 
-CUT3 reads keybindings from the active state directory:
+Draft reads keybindings from the active state directory:
 
 - `<state-dir>/keybindings.json`
 
 Examples:
 
-- Default server/desktop path: `~/.t3/userdata/keybindings.json`
-- Root dev commands usually use a dev-scoped state dir, so the file is typically under `~/.t3/dev/keybindings.json`
-- `--state-dir` or `CUT3_STATE_DIR` changes the location
+- Default server/desktop path: `~/.draft/keybindings.json`
+- Root dev commands usually use a dev-scoped state dir, so the file is typically under `~/.draft/dev/keybindings.json`
+- `--state-dir` or `DRAFT_STATE_DIR` changes the location
 
 The file must be a JSON array of rules:
 

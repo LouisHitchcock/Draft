@@ -1,5 +1,5 @@
-import { type ProviderKind } from "@t3tools/contracts";
-import { normalizeModelSlug } from "@t3tools/shared/model";
+import { type ProviderKind } from "@draft/contracts";
+import { normalizeModelSlug } from "@draft/shared/model";
 
 const DEFAULT_MODEL_PREFERENCE_LIMIT = 32;
 

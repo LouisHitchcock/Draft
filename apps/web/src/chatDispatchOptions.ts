@@ -4,12 +4,12 @@ import type {
   ProviderKind,
   ProviderReasoningLevel,
   ServerCopilotReasoningProbe,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import {
   getDefaultReasoningEffort,
   getReasoningEffortOptions,
   isCodexOpenRouterModel,
-} from "@t3tools/shared/model";
+} from "@draft/shared/model";
 
 function isCodexReasoningEffort(
   value: ProviderReasoningLevel | null,

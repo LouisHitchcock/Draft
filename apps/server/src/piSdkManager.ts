@@ -35,7 +35,7 @@ import {
   type ProviderSession,
   type ProviderSessionStartInput,
   type ProviderTurnStartResult,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 
 import { resolveAttachmentPath } from "./attachmentStore.ts";
 import type {
@@ -1061,7 +1061,7 @@ export class PiSdkManager extends EventEmitter<PiSdkManagerEvents> {
       this.emitSessionStarted(context);
       if (previousContext) {
         await this.disposeContext(previousContext, {
-          reason: "Pi session replaced by a newer CUT3 session.",
+          reason: "Pi session replaced by a newer Draft session.",
           emitExit: false,
         });
       }
@@ -1210,7 +1210,7 @@ export class PiSdkManager extends EventEmitter<PiSdkManagerEvents> {
     _requestId?: ApprovalRequestId,
     _answers?: unknown,
   ): Promise<void> {
-    throw new Error("Pi user-input requests are not supported by this CUT3 integration.");
+    throw new Error("Pi user-input requests are not supported by this Draft integration.");
   }
 
   async stopSession(threadId: ThreadId): Promise<void> {

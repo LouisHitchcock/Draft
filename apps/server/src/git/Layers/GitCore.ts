@@ -8,7 +8,7 @@ const STATUS_UPSTREAM_REFRESH_INTERVAL = Duration.seconds(15);
 const STATUS_UPSTREAM_REFRESH_TIMEOUT = Duration.seconds(5);
 const STATUS_UPSTREAM_REFRESH_CACHE_CAPACITY = 2_048;
 const DEFAULT_BASE_BRANCH_CANDIDATES = ["main", "master"] as const;
-const PREFERRED_REMOTE_NAME = "CUT3";
+const PREFERRED_REMOTE_NAME = "Draft";
 const LEGACY_REMOTE_NAME = "origin";
 
 class StatusUpstreamRefreshCacheKey extends Data.Class<{
@@ -1211,7 +1211,7 @@ const makeGitCore = Effect.gen(function* () {
       const repoName = path.basename(input.cwd);
       const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? "/tmp";
       const worktreePath =
-        input.path ?? path.join(homeDir, ".t3", "worktrees", repoName, sanitizedBranch);
+        input.path ?? path.join(homeDir, ".draft", "worktrees", repoName, sanitizedBranch);
       const args = input.newBranch
         ? ["worktree", "add", "-b", input.newBranch, worktreePath, input.branch]
         : ["worktree", "add", worktreePath, input.branch];

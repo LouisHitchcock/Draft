@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ProjectCommandTemplate } from "@t3tools/contracts";
+import type { ProjectCommandTemplate } from "@draft/contracts";
 
 import {
   expandProjectCommandTemplate,
@@ -9,7 +9,7 @@ import {
 
 const DEPLOY_TEMPLATE: ProjectCommandTemplate = {
   name: "deploy",
-  relativePath: ".cut3/commands/deploy.md",
+  relativePath: ".draft/commands/deploy.md",
   description: "Deploy the selected target",
   template: "Deploy $1 with notes: $ARGUMENTS",
   provider: "codex",

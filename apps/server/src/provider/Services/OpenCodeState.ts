@@ -4,7 +4,7 @@ import type {
   ServerOpenCodeAddCredentialInput,
   ServerOpenCodeRemoveCredentialInput,
   ServerOpenCodeCredentialResult,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -19,5 +19,5 @@ export interface OpenCodeStateShape {
 }
 
 export class OpenCodeState extends ServiceMap.Service<OpenCodeState, OpenCodeStateShape>()(
-  "t4code/provider/Services/OpenCodeState",
+  "draft/provider/Services/OpenCodeState",
 ) {}

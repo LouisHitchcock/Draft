@@ -17,7 +17,7 @@ import {
   ThreadId,
   TurnId,
   type ProviderTurnStartResult,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 
 import {
   createPermissionOutcome,
@@ -200,7 +200,7 @@ export function buildOpenCodeCliEnv(input: {
 
 export function normalizeOpenCodeStartErrorMessage(rawMessage: string): string {
   if (/missing environment variable:\s*['"]?OPENROUTER_API_KEY['"]?/i.test(rawMessage)) {
-    return "OpenCode provider config requires OPENROUTER_API_KEY. Add an OpenRouter API key in CUT3 Settings or export OPENROUTER_API_KEY before starting CUT3.";
+    return "OpenCode provider config requires OPENROUTER_API_KEY. Add an OpenRouter API key in Draft Settings or export OPENROUTER_API_KEY before starting Draft.";
   }
 
   if (
@@ -890,7 +890,7 @@ export class OpenCodeAcpManager extends EventEmitter<OpenCodeAcpManagerEvents> {
   }
 
   async respondToUserInput(): Promise<void> {
-    throw new Error("OpenCode ACP does not expose structured user input requests in CUT3 yet.");
+    throw new Error("OpenCode ACP does not expose structured user input requests in Draft yet.");
   }
 
   async stopSession(threadId: ThreadId): Promise<void> {

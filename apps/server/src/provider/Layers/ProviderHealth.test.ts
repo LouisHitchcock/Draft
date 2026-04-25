@@ -211,7 +211,7 @@ it.layer(NodeServices.layer)("ProviderHealth", (it) => {
         assert.strictEqual(status.authStatus, "unknown");
         assert.strictEqual(
           status.message,
-          "Codex CLI v0.36.0 is too old for CUT3. Upgrade to v0.37.0 or newer and restart CUT3.",
+          "Codex CLI v0.36.0 is too old for Draft. Upgrade to v0.37.0 or newer and restart Draft.",
         );
       }).pipe(
         Effect.provide(
@@ -434,7 +434,7 @@ it.layer(NodeServices.layer)("ProviderHealth", (it) => {
           assert.strictEqual(status.authStatus, "unauthenticated");
           assert.strictEqual(
             status.message,
-            "Pi is embedded in CUT3, but no authenticated Pi-backed models are currently available. Run `pi` (or `bunx pi`) and use `/login`, or populate ~/.pi/agent/auth.json / provider env vars.",
+            "Pi is embedded in Draft, but no authenticated Pi-backed models are currently available. Run `pi` (or `bunx pi`) and use `/login`, or populate ~/.pi/agent/auth.json / provider env vars.",
           );
         }),
     );
@@ -460,7 +460,7 @@ it.layer(NodeServices.layer)("ProviderHealth", (it) => {
         assert.strictEqual(typeof status.availableModels?.[0]?.supportsImageInput, "boolean");
         assert.match(
           status.message ?? "",
-          /^Pi is ready with \d+ authenticated models?\. CUT3 reuses ~\/\.pi\/agent auth\/models config while keeping Pi resource discovery disabled by default\.$/,
+          /^Pi is ready with \d+ authenticated models?\. Draft reuses ~\/\.pi\/agent auth\/models config while keeping Pi resource discovery disabled by default\.$/,
         );
       }),
     );

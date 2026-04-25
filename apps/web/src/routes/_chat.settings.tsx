@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { OPENROUTER_FREE_ROUTER_MODEL, type ProviderKind } from "@t3tools/contracts";
-import { getModelOptions, isCodexOpenRouterModel, normalizeModelSlug } from "@t3tools/shared/model";
+import { OPENROUTER_FREE_ROUTER_MODEL, type ProviderKind } from "@draft/contracts";
+import { getModelOptions, isCodexOpenRouterModel, normalizeModelSlug } from "@draft/shared/model";
 import { ImagePlusIcon, LoaderCircleIcon, RefreshCwIcon, Trash2Icon, ZapIcon } from "lucide-react";
 
 import {
@@ -24,7 +24,7 @@ import { removeChatBackgroundBlob, saveChatBackgroundBlob } from "../lib/chatBac
 import { formatCompactTokenCount } from "../lib/contextWindow";
 import { cn } from "../lib/utils";
 import {
-  isCut3CompatibleOpenRouterModelOption,
+  isDraftCompatibleOpenRouterModelOption,
   isOpenRouterGuaranteedFreeSlug,
   OPENROUTER_FREE_ROUTER_OPTION,
   supportsOpenRouterNativeToolCalling,
@@ -118,7 +118,7 @@ function getSettingsCopy(language: AppLanguage) {
       blurDescription: "برای نرم تر شدن والپیپرهای پرجزئیات پشت پیام ها، تاری را بیشتر کنید.",
       resetImageEffects: "بازنشانی افکت های تصویر",
       imageStorageNote: (sizeLabel: string) =>
-        `CUT3 این تصویر را در تنظیمات محلی همین دستگاه نگه می دارد. اندازه آن را حداکثر ${sizeLabel} نگه دارید.`,
+        `Draft این تصویر را در تنظیمات محلی همین دستگاه نگه می دارد. اندازه آن را حداکثر ${sizeLabel} نگه دارید.`,
       chooseImageFile: "یک فایل تصویری انتخاب کنید.",
       imageTooLarge: (sizeLabel: string) =>
         `یک تصویر حداکثر ${sizeLabel} انتخاب کنید تا به صورت محلی ذخیره شود.`,
@@ -136,12 +136,12 @@ function getSettingsCopy(language: AppLanguage) {
       resetCodexOverrides: "بازنشانی بازنویسی های Codex",
       openRouterTitle: "OpenRouter",
       openRouterDescription:
-        "CUT3، OpenRouter را به صورت یک بخش مستقل در رابط نشان می دهد و این نشست ها را از پشت صحنه از طریق Codex اجرا می کند؛ بنابراین می توانید از openrouter/free یا مدل های ذخیره شده :free بدون تغییر پیکربندی عادی Codex استفاده کنید.",
+        "Draft، OpenRouter را به صورت یک بخش مستقل در رابط نشان می دهد و این نشست ها را از پشت صحنه از طریق Codex اجرا می کند؛ بنابراین می توانید از openrouter/free یا مدل های ذخیره شده :free بدون تغییر پیکربندی عادی Codex استفاده کنید.",
       openRouterApiKey: "کلید API OpenRouter",
       openRouterKeyDescription: (electron: boolean) =>
         electron
-          ? "فقط برای مدل های Codex که از OpenRouter عبور می کنند لازم است. CUT3 آن را در نشست دسکتاپ نگه می دارد و در صورت وجود ذخیره سازی امن، در مخزن اعتبار سیستم عامل ذخیره می کند. برای مجموعه مدل های رایگان فعلی از openrouter/free استفاده کنید یا در ادامه اسلاگ های :free مشخص را اضافه کنید."
-          : "فقط برای مدل های Codex که از OpenRouter عبور می کنند لازم است. CUT3 آن را فقط در حافظه نشست فعلی مرورگر نگه می دارد. برای مجموعه مدل های رایگان فعلی از openrouter/free استفاده کنید یا در ادامه اسلاگ های :free مشخص را اضافه کنید.",
+          ? "فقط برای مدل های Codex که از OpenRouter عبور می کنند لازم است. Draft آن را در نشست دسکتاپ نگه می دارد و در صورت وجود ذخیره سازی امن، در مخزن اعتبار سیستم عامل ذخیره می کند. برای مجموعه مدل های رایگان فعلی از openrouter/free استفاده کنید یا در ادامه اسلاگ های :free مشخص را اضافه کنید."
+          : "فقط برای مدل های Codex که از OpenRouter عبور می کنند لازم است. Draft آن را فقط در حافظه نشست فعلی مرورگر نگه می دارد. برای مجموعه مدل های رایگان فعلی از openrouter/free استفاده کنید یا در ادامه اسلاگ های :free مشخص را اضافه کنید.",
       openRouterConfigured: "کلید OpenRouter برای نشست های جدید Codex تنظیم شده است.",
       openRouterMissing: "برای استفاده از مدل های Codex مبتنی بر OpenRouter یک کلید اضافه کنید.",
       resetOpenRouterKey: "بازنشانی کلید OpenRouter",
@@ -153,7 +153,7 @@ function getSettingsCopy(language: AppLanguage) {
       resetCopilotOverrides: "بازنشانی بازنویسی های Copilot",
       opencodeTitle: "OpenCode",
       opencodeDescription:
-        "برای نشست های جدید OpenCode اعمال می شود و به CUT3 اجازه می دهد از نصب غیرپیش فرض opencode استفاده کند. اعتبارنامه ها را با opencode auth login و opencode auth logout مدیریت کنید، و اگر پیکربندی OpenCode شما به OPENROUTER_API_KEY نیاز دارد کلید OpenRouter را در بخش بالایی CUT3 وارد کنید.",
+        "برای نشست های جدید OpenCode اعمال می شود و به Draft اجازه می دهد از نصب غیرپیش فرض opencode استفاده کند. اعتبارنامه ها را با opencode auth login و opencode auth logout مدیریت کنید، و اگر پیکربندی OpenCode شما به OPENROUTER_API_KEY نیاز دارد کلید OpenRouter را در بخش بالایی Draft وارد کنید.",
       opencodeBinaryPath: "مسیر باینری",
       leaveBlankOpencode: "برای استفاده از opencode از PATH این کادر را خالی بگذارید.",
       resetOpencodeOverrides: "بازنشانی بازنویسی ها",
@@ -165,12 +165,12 @@ function getSettingsCopy(language: AppLanguage) {
       kimiApiKey: "کلید API Kimi",
       kimiApiDescription: (electron: boolean) =>
         electron
-          ? "اگر می خواهید CUT3 نشست های Kimi را مستقیم شروع کند، این کلید را از Kimi Code Console بسازید. CUT3 آن را در نشست دسکتاپ نگه می دارد و در صورت وجود ذخیره سازی امن، در مخزن اعتبار سیستم عامل ذخیره می کند. اگر ترجیح می دهید از ورود محلی CLI استفاده کنید، این فیلد را خالی بگذارید و با kimi login یا /login وارد شوید."
-          : "اگر می خواهید CUT3 نشست های Kimi را مستقیم شروع کند، این کلید را از Kimi Code Console بسازید. CUT3 آن را فقط در حافظه نشست فعلی مرورگر نگه می دارد. اگر ترجیح می دهید از ورود محلی CLI استفاده کنید، این فیلد را خالی بگذارید و با kimi login یا /login وارد شوید.",
+          ? "اگر می خواهید Draft نشست های Kimi را مستقیم شروع کند، این کلید را از Kimi Code Console بسازید. Draft آن را در نشست دسکتاپ نگه می دارد و در صورت وجود ذخیره سازی امن، در مخزن اعتبار سیستم عامل ذخیره می کند. اگر ترجیح می دهید از ورود محلی CLI استفاده کنید، این فیلد را خالی بگذارید و با kimi login یا /login وارد شوید."
+          : "اگر می خواهید Draft نشست های Kimi را مستقیم شروع کند، این کلید را از Kimi Code Console بسازید. Draft آن را فقط در حافظه نشست فعلی مرورگر نگه می دارد. اگر ترجیح می دهید از ورود محلی CLI استفاده کنید، این فیلد را خالی بگذارید و با kimi login یا /login وارد شوید.",
       resetKimiOverrides: "بازنشانی بازنویسی های Kimi",
       piTitle: "Pi agent harness",
       piDescription:
-        "CUT3، Pi را از طریق SDK نود خودش داخل سرور تعبیه می کند. اعتبارنامه ها و کاتالوگ مدل Pi از ~/.pi/agent خوانده می شوند؛ برای ورود از خود Pi با pi یا bunx pi استفاده کنید و /login را اجرا کنید، یا auth.json / متغیرهای محیطی Pi را پر کنید. CUT3 عمداً پکیج ها، AGENTS، system promptها، افزونه ها، مهارت ها، پرامپت ها و تم های Pi را در این مسیر غیرفعال می کند تا دستورهای فضای کاری فقط از CUT3 بیایند.",
+        "Draft، Pi را از طریق SDK نود خودش داخل سرور تعبیه می کند. اعتبارنامه ها و کاتالوگ مدل Pi از ~/.pi/agent خوانده می شوند؛ برای ورود از خود Pi با pi یا bunx pi استفاده کنید و /login را اجرا کنید، یا auth.json / متغیرهای محیطی Pi را پر کنید. Draft عمداً پکیج ها، AGENTS، system promptها، افزونه ها، مهارت ها، پرامپت ها و تم های Pi را در این مسیر غیرفعال می کند تا دستورهای فضای کاری فقط از Draft بیایند.",
       modelsTitle: "مدل ها",
       modelsDescription:
         "اسلاگ های مدل اضافی را ذخیره کنید تا در انتخابگر مدل گفتگو و پیشنهادهای دستور /model دیده شوند. مدل های رایگان OpenRouter اکنون بخش مستقل خودشان را دارند.",
@@ -191,16 +191,16 @@ function getSettingsCopy(language: AppLanguage) {
       },
       openRouterFreeModelsTitle: "مدل های رایگان OpenRouter",
       openRouterFreeModelsDescription: (routerSlug: string) =>
-        `CUT3 کاتالوگ زنده OpenRouter را بررسی می کند و مدل هایی را نشان می دهد که همین حالا رایگان هستند. روتر داخلی ${routerSlug} همیشه در دسترس است و می توانید هر مدل رایگان زنده را ذخیره کنید تا در انتخابگر و پیشنهادهای /model ظاهر شود.`,
+        `Draft کاتالوگ زنده OpenRouter را بررسی می کند و مدل هایی را نشان می دهد که همین حالا رایگان هستند. روتر داخلی ${routerSlug} همیشه در دسترس است و می توانید هر مدل رایگان زنده را ذخیره کنید تا در انتخابگر و پیشنهادهای /model ظاهر شود.`,
       refreshList: "نوسازی فهرست",
       openRouterChecking: "در حال بررسی OpenRouter برای فهرست فعلی مدل های رایگان...",
       openRouterAvailable: (count: number) =>
-        `${count} مدل رایگان زنده OpenRouter در حال حاضر با مسیر بومی ابزار CUT3 سازگار ${count === 1 ? "است" : "هستند"}، به علاوه روتر داخلی.`,
+        `${count} مدل رایگان زنده OpenRouter در حال حاضر با مسیر بومی ابزار Draft سازگار ${count === 1 ? "است" : "هستند"}، به علاوه روتر داخلی.`,
       openRouterCached: (count: number) =>
-        `CUT3 آخرین کاتالوگ سالم OpenRouter را نشان می دهد (${count} مدل رایگان سازگار به علاوه روتر داخلی) چون واکشی زنده فعلاً در دسترس نیست.`,
+        `Draft آخرین کاتالوگ سالم OpenRouter را نشان می دهد (${count} مدل رایگان سازگار به علاوه روتر داخلی) چون واکشی زنده فعلاً در دسترس نیست.`,
       openRouterUnavailable: "کشف زنده مدل های رایگان OpenRouter در حال حاضر در دسترس نیست.",
       openRouterFilteringNote: (routerSlug: string) =>
-        `CUT3 فقط انتخاب هایی را نشان می دهد که روی :free یا ${routerSlug} قفل شده باشند و از ابزارها پشتیبانی کنند.`,
+        `Draft فقط انتخاب هایی را نشان می دهد که روی :free یا ${routerSlug} قفل شده باشند و از ابزارها پشتیبانی کنند.`,
       lastCheckedAt: (label: string) => `آخرین بررسی در ${label}.`,
       builtIn: "داخلی",
       saved: "ذخیره شده",
@@ -266,7 +266,7 @@ function getSettingsCopy(language: AppLanguage) {
       desktopNotifications: "اعلان‌های دسکتاپ",
       desktopNotificationsDescription:
         "وقتی agent کارش تمام شد و پنجره فعال نیست، یک اعلان دسکتاپ نشان بده.",
-      desktopNotificationsGranted: "اعلان‌های مرورگر برای CUT3 مجاز هستند.",
+      desktopNotificationsGranted: "اعلان‌های مرورگر برای Draft مجاز هستند.",
       desktopNotificationsBlocked:
         "اعلان‌ها در تنظیمات مرورگر یا سایت مسدود شده‌اند. برای استفاده، دوباره آن‌ها را مجاز کنید.",
       desktopNotificationsUnsupported: "این محیط از اعلان‌های دسکتاپ پشتیبانی نمی‌کند.",
@@ -291,11 +291,11 @@ function getSettingsCopy(language: AppLanguage) {
       modelTooLong: (maxLength: number) => `اسلاگ مدل باید حداکثر ${maxLength} کاراکتر باشد.`,
       customModelAlreadySaved: "این مدل سفارشی قبلا ذخیره شده است.",
       openRouterMustBeFree:
-        "شناسه های مدل OpenRouter باید از openrouter/free یا یک اسلاگ صریح :free استفاده کنند تا CUT3 ناخواسته به مدل پولی منتقل نشود.",
+        "شناسه های مدل OpenRouter باید از openrouter/free یا یک اسلاگ صریح :free استفاده کنند تا Draft ناخواسته به مدل پولی منتقل نشود.",
       openRouterNotInCatalog:
         "این مدل OpenRouter در کاتالوگ زنده فعلی رایگان وجود ندارد. فهرست را نوسازی کنید و یک مدل :free فعلی انتخاب کنید.",
       openRouterNeedsTools:
-        "CUT3 به مدل های OpenRouter نیاز دارد که هم tools و هم tool_choice را اعلام کنند. یک مدل رایگان دیگر انتخاب کنید یا از openrouter/free استفاده کنید.",
+        "Draft به مدل های OpenRouter نیاز دارد که هم tools و هم tool_choice را اعلام کنند. یک مدل رایگان دیگر انتخاب کنید یا از openrouter/free استفاده کنید.",
       noEditorsFound: "هیچ ویرایشگری در دسترس نیست.",
       openKeybindingsFailed: "باز کردن فایل کلیدهای میانبر ممکن نشد.",
       openRouterWarningMissingCatalog: "دیگر در کاتالوگ زنده رایگان فعلی OpenRouter دیده نمی شود.",
@@ -324,7 +324,7 @@ function getSettingsCopy(language: AppLanguage) {
     blurDescription: "Increase blur to soften detailed wallpapers behind message content.",
     resetImageEffects: "Reset image effects",
     imageStorageNote: (sizeLabel: string) =>
-      `CUT3 stores this image in local app settings on this device. Keep it at or under ${sizeLabel}.`,
+      `Draft stores this image in local app settings on this device. Keep it at or under ${sizeLabel}.`,
     chooseImageFile: "Choose an image file.",
     imageTooLarge: (sizeLabel: string) =>
       `Choose an image up to ${sizeLabel} so it can be saved locally.`,
@@ -342,12 +342,12 @@ function getSettingsCopy(language: AppLanguage) {
     resetCodexOverrides: "Reset codex overrides",
     openRouterTitle: "OpenRouter",
     openRouterDescription:
-      "CUT3 exposes OpenRouter as its own top-level UI section and routes those sessions through Codex under the hood, so you can use the built-in openrouter/free router or saved OpenRouter :free model ids without editing your normal Codex config.",
+      "Draft exposes OpenRouter as its own top-level UI section and routes those sessions through Codex under the hood, so you can use the built-in openrouter/free router or saved OpenRouter :free model ids without editing your normal Codex config.",
     openRouterApiKey: "OpenRouter API key",
     openRouterKeyDescription: (electron: boolean) =>
       electron
-        ? "Needed only for Codex models routed through OpenRouter. CUT3 keeps it in the desktop session and persists it in your OS credential store when secure storage is available. Use openrouter/free for the current free-model pool, or add specific :free slugs below."
-        : "Needed only for Codex models routed through OpenRouter. CUT3 keeps it only in memory for the current browser session. Use openrouter/free for the current free-model pool, or add specific :free slugs below.",
+        ? "Needed only for Codex models routed through OpenRouter. Draft keeps it in the desktop session and persists it in your OS credential store when secure storage is available. Use openrouter/free for the current free-model pool, or add specific :free slugs below."
+        : "Needed only for Codex models routed through OpenRouter. Draft keeps it only in memory for the current browser session. Use openrouter/free for the current free-model pool, or add specific :free slugs below.",
     openRouterConfigured: "OpenRouter key is configured for new Codex sessions.",
     openRouterMissing: "Add a key to use OpenRouter-routed Codex models.",
     resetOpenRouterKey: "Reset OpenRouter key",
@@ -359,24 +359,24 @@ function getSettingsCopy(language: AppLanguage) {
     resetCopilotOverrides: "Reset copilot overrides",
     opencodeTitle: "OpenCode",
     opencodeDescription:
-      "Applies to new OpenCode sessions and lets CUT3 use a non-default `opencode` install. Manage credentials with `opencode auth login` and `opencode auth logout`, and add the top-level OpenRouter key in CUT3 if your OpenCode config expects `OPENROUTER_API_KEY`.",
+      "Applies to new OpenCode sessions and lets Draft use a non-default `opencode` install. Manage credentials with `opencode auth login` and `opencode auth logout`, and add the top-level OpenRouter key in Draft if your OpenCode config expects `OPENROUTER_API_KEY`.",
     opencodeBinaryPath: "Binary path",
     leaveBlankOpencode: "Leave blank to use opencode from your PATH.",
     resetOpencodeOverrides: "Reset overrides",
     kimiTitle: "Kimi Code CLI",
     kimiDescription:
-      "These overrides apply to new Kimi Code sessions. Install with curl -LsSf https://code.kimi.com/install.sh | bash, then authenticate with `kimi login` or the in-shell `/login` flow, or add a Kimi Code API key here to let CUT3 start sessions directly.",
+      "These overrides apply to new Kimi Code sessions. Install with curl -LsSf https://code.kimi.com/install.sh | bash, then authenticate with `kimi login` or the in-shell `/login` flow, or add a Kimi Code API key here to let Draft start sessions directly.",
     kimiBinaryPath: "Kimi binary path",
     leaveBlankKimi: "Leave blank to use kimi from your PATH.",
     kimiApiKey: "Kimi API key",
     kimiApiDescription: (electron: boolean) =>
       electron
-        ? "Generate this from the Kimi Code Console if you want CUT3 to start Kimi sessions directly. CUT3 keeps it in the desktop session and persists it in your OS credential store when secure storage is available. Leave this blank if you prefer to authenticate in the local CLI with `kimi login` or `/login`."
-        : "Generate this from the Kimi Code Console if you want CUT3 to start Kimi sessions directly. CUT3 keeps it only in memory for the current browser session. Leave this blank if you prefer to authenticate in the local CLI with `kimi login` or `/login`.",
+        ? "Generate this from the Kimi Code Console if you want Draft to start Kimi sessions directly. Draft keeps it in the desktop session and persists it in your OS credential store when secure storage is available. Leave this blank if you prefer to authenticate in the local CLI with `kimi login` or `/login`."
+        : "Generate this from the Kimi Code Console if you want Draft to start Kimi sessions directly. Draft keeps it only in memory for the current browser session. Leave this blank if you prefer to authenticate in the local CLI with `kimi login` or `/login`.",
     resetKimiOverrides: "Reset kimi overrides",
     piTitle: "Pi agent harness",
     piDescription:
-      "CUT3 embeds Pi through its Node SDK. Pi credentials and model discovery come from ~/.pi/agent; authenticate Pi through the Pi CLI (`pi` or `bunx pi`) and `/login`, or populate Pi's auth.json / provider environment variables. CUT3 intentionally disables Pi packages, AGENTS files, system prompts, extensions, skills, prompt templates, and themes on this path so workspace instructions still come only from CUT3.",
+      "Draft embeds Pi through its Node SDK. Pi credentials and model discovery come from ~/.pi/agent; authenticate Pi through the Pi CLI (`pi` or `bunx pi`) and `/login`, or populate Pi's auth.json / provider environment variables. Draft intentionally disables Pi packages, AGENTS files, system prompts, extensions, skills, prompt templates, and themes on this path so workspace instructions still come only from Draft.",
     modelsTitle: "Models",
     modelsDescription:
       "Save additional provider model slugs so they appear in the chat model picker and /model command suggestions. OpenRouter free models now have their own section, while the cards below handle additional provider-specific custom models.",
@@ -397,16 +397,16 @@ function getSettingsCopy(language: AppLanguage) {
     },
     openRouterFreeModelsTitle: "OpenRouter Free Models",
     openRouterFreeModelsDescription: (routerSlug: string) =>
-      `CUT3 checks OpenRouter's live catalog and lists the models that are free right now. The built-in ${routerSlug} router is always available, and you can save any live free model below so it shows up in the picker and /model suggestions.`,
+      `Draft checks OpenRouter's live catalog and lists the models that are free right now. The built-in ${routerSlug} router is always available, and you can save any live free model below so it shows up in the picker and /model suggestions.`,
     refreshList: "Refresh list",
     openRouterChecking: "Checking OpenRouter for the current free-model list...",
     openRouterAvailable: (count: number) =>
-      `${count} live OpenRouter free model${count === 1 ? " is" : "s are"} currently compatible with CUT3's native tool-calling path, plus the built-in router.`,
+      `${count} live OpenRouter free model${count === 1 ? " is" : "s are"} currently compatible with Draft's native tool-calling path, plus the built-in router.`,
     openRouterCached: (count: number) =>
-      `CUT3 is showing the last known-good OpenRouter catalog (${count} compatible free model${count === 1 ? "" : "s"} plus the built-in router) because the live fetch is currently unavailable.`,
+      `Draft is showing the last known-good OpenRouter catalog (${count} compatible free model${count === 1 ? "" : "s"} plus the built-in router) because the live fetch is currently unavailable.`,
     openRouterUnavailable: "Live OpenRouter free-model discovery is currently unavailable.",
     openRouterFilteringNote: (routerSlug: string) =>
-      `CUT3 only lists OpenRouter picks that are locked to :free or ${routerSlug} and advertise tool use.`,
+      `Draft only lists OpenRouter picks that are locked to :free or ${routerSlug} and advertise tool use.`,
     lastCheckedAt: (label: string) => `Last checked at ${label}.`,
     builtIn: "Built in",
     saved: "Saved",
@@ -469,7 +469,7 @@ function getSettingsCopy(language: AppLanguage) {
     desktopNotifications: "Desktop notifications",
     desktopNotificationsDescription:
       "Show a desktop notification when the agent finishes a task and the window is not focused.",
-    desktopNotificationsGranted: "Browser notifications are allowed for CUT3.",
+    desktopNotificationsGranted: "Browser notifications are allowed for Draft.",
     desktopNotificationsBlocked:
       "Notifications are blocked in your browser or site settings. Re-enable them there to use this feature.",
     desktopNotificationsUnsupported: "Desktop notifications are not supported in this environment.",
@@ -495,11 +495,11 @@ function getSettingsCopy(language: AppLanguage) {
     modelTooLong: (maxLength: number) => `Model slugs must be ${maxLength} characters or less.`,
     customModelAlreadySaved: "That custom model is already saved.",
     openRouterMustBeFree:
-      "OpenRouter model ids must use openrouter/free or an explicit :free slug so CUT3 cannot drift onto a billed model.",
+      "OpenRouter model ids must use openrouter/free or an explicit :free slug so Draft cannot drift onto a billed model.",
     openRouterNotInCatalog:
       "That OpenRouter model is not in the current live free catalog. Refresh the list and pick a currently free :free model.",
     openRouterNeedsTools:
-      "CUT3 requires OpenRouter models that advertise both tools and tool_choice. Pick another listed free model or use openrouter/free.",
+      "Draft requires OpenRouter models that advertise both tools and tool_choice. Pick another listed free model or use openrouter/free.",
     noEditorsFound: "No available editors found.",
     openKeybindingsFailed: "Unable to open keybindings file.",
     openRouterWarningMissingCatalog: "No longer appears in OpenRouter's current live free catalog.",
@@ -702,7 +702,7 @@ function SettingsRouteView() {
     openRouterCatalogQuery.data?.status === "available" &&
     openRouterCatalogQuery.data.source === "live";
   const compatibleOpenRouterFreeModels = useMemo(
-    () => openRouterFreeModels.filter(isCut3CompatibleOpenRouterModelOption),
+    () => openRouterFreeModels.filter(isDraftCompatibleOpenRouterModelOption),
     [openRouterFreeModels],
   );
   const openRouterModelsBySlug = useMemo(

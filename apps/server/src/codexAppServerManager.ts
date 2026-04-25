@@ -20,8 +20,8 @@ import {
   type ProviderTurnStartResult,
   RuntimeMode,
   ProviderInteractionMode,
-} from "@t3tools/contracts";
-import { isCodexOpenRouterModel, normalizeModelSlug } from "@t3tools/shared/model";
+} from "@draft/contracts";
+import { isCodexOpenRouterModel, normalizeModelSlug } from "@draft/shared/model";
 import { Effect, ServiceMap } from "effect";
 
 import {
@@ -458,8 +458,8 @@ export function normalizeCodexModelSlug(
 export function buildCodexInitializeParams() {
   return {
     clientInfo: {
-      name: "cut3_desktop",
-      title: "CUT3 Desktop",
+      name: "draft_desktop",
+      title: "Draft Desktop",
       version: "0.1.0",
     },
     capabilities: {
@@ -1088,7 +1088,7 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
           toModel: OPENROUTER_FREE_ROUTER_MODEL,
           reason:
             openRouterFallbackReason ??
-            "OpenRouter could not serve the pinned free model and CUT3 retried through the free router.",
+            "OpenRouter could not serve the pinned free model and Draft retried through the free router.",
           turnId,
         });
       }
@@ -1829,7 +1829,7 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
         toModel: OPENROUTER_FREE_ROUTER_MODEL,
         reason:
           pendingRetry.retryReason ??
-          "OpenRouter could not serve the pinned free model and CUT3 retried through the free router.",
+          "OpenRouter could not serve the pinned free model and Draft retried through the free router.",
         turnId,
       });
       this.updateSession(context, {

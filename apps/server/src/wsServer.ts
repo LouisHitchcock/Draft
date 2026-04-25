@@ -40,7 +40,7 @@ import {
   type TerminalExecEvent,
   type TerminalEvent,
   type TerminalOpenInput,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import {
   Cause,
@@ -110,9 +110,9 @@ import { createCopilotUsageReader } from "./copilotUsage.ts";
 import { CopilotAcpManager, readCopilotReasoningEffortSelector } from "./copilotAcpManager.ts";
 import { makeServerPushBus } from "./wsServer/pushBus.ts";
 import { makeServerReadiness } from "./wsServer/readiness.ts";
-import { decodeJsonResult, formatSchemaError } from "@t3tools/shared/schemaJson";
-import { getWsAuthToken, redactWsAuthToken } from "@t3tools/shared/wsAuth";
-import { isBangCommandTerminalId } from "@t3tools/shared/terminalRun";
+import { decodeJsonResult, formatSchemaError } from "@draft/shared/schemaJson";
+import { getWsAuthToken, redactWsAuthToken } from "@draft/shared/wsAuth";
+import { isBangCommandTerminalId } from "@draft/shared/terminalRun";
 import { listCodexMcpServerStatuses } from "./codexMcpServerStatus.ts";
 import {
   buildAllowedWebSocketOrigins,
@@ -157,7 +157,7 @@ export interface ServerShape {
 /**
  * Server - Service tag for HTTP/WebSocket lifecycle management.
  */
-export class Server extends ServiceMap.Service<Server, ServerShape>()("t4code/wsServer/Server") {}
+export class Server extends ServiceMap.Service<Server, ServerShape>()("draft/wsServer/Server") {}
 
 const isServerNotRunningError = (error: Error): boolean => {
   const maybeCode = (error as NodeJS.ErrnoException).code;

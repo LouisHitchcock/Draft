@@ -1,6 +1,6 @@
 import { memo } from "react";
 
-import type { ThreadShareSummary } from "@t3tools/contracts";
+import type { ThreadShareSummary } from "@draft/contracts";
 
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button } from "../ui/button";

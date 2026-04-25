@@ -3,7 +3,7 @@ import {
   SCRIPT_RUN_COMMAND_PATTERN,
   type KeybindingCommand,
   type ProjectScript,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Schema } from "effect";
 
 function normalizeScriptId(value: string): string {
@@ -67,12 +67,10 @@ export function projectScriptRuntimeEnv(
   input: ProjectScriptRuntimeEnvInput,
 ): Record<string, string> {
   const env: Record<string, string> = {
-    T4CODE_PROJECT_ROOT: input.project.cwd,
-    CUT3_PROJECT_ROOT: input.project.cwd,
+    DRAFT_PROJECT_ROOT: input.project.cwd,
   };
   if (input.worktreePath) {
-    env.T4CODE_WORKTREE_PATH = input.worktreePath;
-    env.CUT3_WORKTREE_PATH = input.worktreePath;
+    env.DRAFT_WORKTREE_PATH = input.worktreePath;
   }
   if (input.extraEnv) {
     return { ...env, ...input.extraEnv };

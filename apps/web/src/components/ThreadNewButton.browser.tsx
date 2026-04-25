@@ -10,7 +10,7 @@ import {
   type WsWelcomePayload,
   WS_CHANNELS,
   WS_METHODS,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { page } from "vitest/browser";
 import { HttpResponse, http, ws } from "msw";
@@ -41,7 +41,7 @@ const wsLink = ws.link(/ws(s)?:\/\/.*/);
 function createBaseServerConfig(): ServerConfig {
   return {
     cwd: "/repo/project",
-    keybindingsConfigPath: "/repo/project/.cut3-keybindings.json",
+    keybindingsConfigPath: "/repo/project/.draft-keybindings.json",
     keybindings: [],
     issues: [],
     providers: [

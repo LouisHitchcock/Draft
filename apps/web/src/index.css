@@ -448,9 +448,9 @@
   --sidebar-accent: var(--accent);
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-ring: var(--ring);
-  --cut3-sidebar-backdrop-filter: none;
-  --cut3-sidebar-surface: var(--sidebar);
-  --cut3-sidebar-surface-solid: var(--sidebar);
+  --draft-sidebar-backdrop-filter: none;
+  --draft-sidebar-surface: var(--sidebar);
+  --draft-sidebar-surface-solid: var(--sidebar);
 
   @variant dark {
     color-scheme: dark;
@@ -485,9 +485,9 @@
     --sidebar-accent: var(--accent);
     --sidebar-accent-foreground: var(--accent-foreground);
     --sidebar-ring: var(--ring);
-    --cut3-sidebar-backdrop-filter: none;
-    --cut3-sidebar-surface: var(--sidebar);
-    --cut3-sidebar-surface-solid: var(--sidebar);
+    --draft-sidebar-backdrop-filter: none;
+    --draft-sidebar-surface: var(--sidebar);
+    --draft-sidebar-surface-solid: var(--sidebar);
   }
 }
 
@@ -781,7 +781,7 @@
   --warning-foreground: #d7ba7d;
 }
 
-:root[data-theme="t3-chat-theme"] {
+:root[data-theme="draft-chat-theme"] {
   color-scheme: dark;
   --background: #121016;
   --foreground: #ffffff;
@@ -810,7 +810,7 @@
   --warning-foreground: #fff0cf;
 }
 
-:root[data-theme="t3-chat-theme"] body {
+:root[data-theme="draft-chat-theme"] body {
   background-image:
     radial-gradient(circle at top, rgba(194, 23, 91, 0.2), transparent 34%),
     radial-gradient(circle at 14% 0%, rgba(163, 31, 89, 0.16), transparent 24%),
@@ -818,14 +818,14 @@
   background-attachment: fixed;
 }
 
-:root[data-theme="t3-chat-theme"] [data-chat-composer-surface="true"] {
+:root[data-theme="draft-chat-theme"] [data-chat-composer-surface="true"] {
   background: #24202d;
   border-color: #302b3c;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
-:root[data-theme="t3-chat-theme"] [data-chat-workspace-shell="true"],
-:root[data-theme="t3-chat-theme"] [data-chat-workstream="true"] {
+:root[data-theme="draft-chat-theme"] [data-chat-workspace-shell="true"],
+:root[data-theme="draft-chat-theme"] [data-chat-workstream="true"] {
   border-color: #302b3c;
   background:
     linear-gradient(180deg, rgba(36, 32, 45, 0.9), rgba(18, 16, 22, 0.92)),
@@ -906,12 +906,12 @@ button {
 
 [data-slot="sidebar-inner"],
 [data-slot="sidebar"][data-mobile="true"] {
-  backdrop-filter: var(--cut3-sidebar-backdrop-filter);
+  backdrop-filter: var(--draft-sidebar-backdrop-filter);
 }
 
 html[data-sidebar-translucent="on"] [data-slot="sidebar-inner"],
 html[data-sidebar-translucent="on"] [data-slot="sidebar"][data-mobile="true"] {
-  background: var(--cut3-sidebar-surface) !important;
+  background: var(--draft-sidebar-surface) !important;
 }
 
 @media (min-width: 48rem) {
@@ -1208,7 +1208,7 @@ label:has(> select#reasoning-effort) select {
   font-family: var(--font-code-snippet) !important;
 }
 
-:root[data-theme="t3-chat-theme"] .chat-markdown .chat-markdown-shiki .shiki {
+:root[data-theme="draft-chat-theme"] .chat-markdown .chat-markdown-shiki .shiki {
   background: #1a1821 !important;
   border-color: #302b3c;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);

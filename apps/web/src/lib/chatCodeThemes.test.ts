@@ -3,15 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   ALL_CHAT_CODE_THEME_NAMES,
   resolveChatCodeThemeName,
-  T3_CHAT_CODE_THEME_BACKGROUND,
-  T3_CHAT_CODE_THEME_NAME,
+  DRAFT_CHAT_CODE_THEME_BACKGROUND,
+  DRAFT_CHAT_CODE_THEME_NAME,
 } from "./chatCodeThemes";
 import { AMOLED_GITHUB_THEME_NAME } from "./amoledGithubTheme";
 import { LILAC_THEME_NAME } from "./lilacTheme";
 
 describe("resolveChatCodeThemeName", () => {
-  it("uses the dedicated chat code theme for the T3 Chat preset", () => {
-    expect(resolveChatCodeThemeName("dark", "t3-chat-theme")).toBe(T3_CHAT_CODE_THEME_NAME);
+  it("uses the dedicated chat code theme for the Draft Chat preset", () => {
+    expect(resolveChatCodeThemeName("dark", "draft-chat-theme")).toBe(DRAFT_CHAT_CODE_THEME_NAME);
   });
 
   it("falls back to the integrated diff/code themes for other presets", () => {
@@ -23,8 +23,8 @@ describe("resolveChatCodeThemeName", () => {
 });
 
 describe("ALL_CHAT_CODE_THEME_NAMES", () => {
-  it("includes the dedicated T3 Chat code theme alongside the bundled themes", () => {
-    expect(ALL_CHAT_CODE_THEME_NAMES).toContain(T3_CHAT_CODE_THEME_NAME);
+  it("includes the dedicated Draft Chat code theme alongside the bundled themes", () => {
+    expect(ALL_CHAT_CODE_THEME_NAMES).toContain(DRAFT_CHAT_CODE_THEME_NAME);
     expect(ALL_CHAT_CODE_THEME_NAMES).toContain(LILAC_THEME_NAME);
     expect(ALL_CHAT_CODE_THEME_NAMES).toContain(AMOLED_GITHUB_THEME_NAME);
     expect(ALL_CHAT_CODE_THEME_NAMES).toContain("catppuccin-mocha");
@@ -32,8 +32,8 @@ describe("ALL_CHAT_CODE_THEME_NAMES", () => {
   });
 });
 
-describe("T3 Chat code theme", () => {
+describe("Draft Chat code theme", () => {
   it("uses the expected darker surface background", () => {
-    expect(T3_CHAT_CODE_THEME_BACKGROUND).toBe("#1a1821");
+    expect(DRAFT_CHAT_CODE_THEME_BACKGROUND).toBe("#1a1821");
   });
 });

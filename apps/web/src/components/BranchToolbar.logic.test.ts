@@ -1,4 +1,4 @@
-import type { GitBranch } from "@t3tools/contracts";
+import type { GitBranch } from "@draft/contracts";
 import { describe, expect, it } from "vitest";
 import {
   dedupeRemoteBranchesWithLocalMatches,
@@ -13,7 +13,7 @@ describe("resolveDraftEnvModeAfterBranchChange", () => {
     expect(
       resolveDraftEnvModeAfterBranchChange({
         nextWorktreePath: null,
-        currentWorktreePath: "/repo/.t3/worktrees/feature-a",
+        currentWorktreePath: "/repo/.draft/worktrees/feature-a",
         effectiveEnvMode: "worktree",
       }),
     ).toBe("local");
@@ -32,7 +32,7 @@ describe("resolveDraftEnvModeAfterBranchChange", () => {
   it("uses worktree mode when selecting a branch already attached to a worktree", () => {
     expect(
       resolveDraftEnvModeAfterBranchChange({
-        nextWorktreePath: "/repo/.t3/worktrees/feature-a",
+        nextWorktreePath: "/repo/.draft/worktrees/feature-a",
         currentWorktreePath: null,
         effectiveEnvMode: "local",
       }),
@@ -77,7 +77,7 @@ describe("resolveBranchToolbarValue", () => {
 
 describe("deriveLocalBranchNameFromRemoteRef", () => {
   it("strips the remote prefix from a remote ref", () => {
-    expect(deriveLocalBranchNameFromRemoteRef("CUT3/feature/demo")).toBe("feature/demo");
+    expect(deriveLocalBranchNameFromRemoteRef("Draft/feature/demo")).toBe("feature/demo");
   });
 
   it("supports remote names that contain slashes", () => {
@@ -87,7 +87,7 @@ describe("deriveLocalBranchNameFromRemoteRef", () => {
   });
 
   it("returns the original name when ref is malformed", () => {
-    expect(deriveLocalBranchNameFromRemoteRef("CUT3/")).toBe("CUT3/");
+    expect(deriveLocalBranchNameFromRemoteRef("Draft/")).toBe("Draft/");
     expect(deriveLocalBranchNameFromRemoteRef("/feature/demo")).toBe("/feature/demo");
   });
 });
@@ -102,17 +102,17 @@ describe("dedupeRemoteBranchesWithLocalMatches", () => {
         worktreePath: null,
       },
       {
-        name: "CUT3/feature/demo",
+        name: "Draft/feature/demo",
         isRemote: true,
-        remoteName: "CUT3",
+        remoteName: "Draft",
         current: false,
         isDefault: false,
         worktreePath: null,
       },
       {
-        name: "CUT3/feature/remote-only",
+        name: "Draft/feature/remote-only",
         isRemote: true,
-        remoteName: "CUT3",
+        remoteName: "Draft",
         current: false,
         isDefault: false,
         worktreePath: null,
@@ -121,7 +121,7 @@ describe("dedupeRemoteBranchesWithLocalMatches", () => {
 
     expect(dedupeRemoteBranchesWithLocalMatches(input).map((branch) => branch.name)).toEqual([
       "feature/demo",
-      "CUT3/feature/remote-only",
+      "Draft/feature/remote-only",
     ]);
   });
 
@@ -134,9 +134,9 @@ describe("dedupeRemoteBranchesWithLocalMatches", () => {
         worktreePath: null,
       },
       {
-        name: "CUT3/feature/remote-only",
+        name: "Draft/feature/remote-only",
         isRemote: true,
-        remoteName: "CUT3",
+        remoteName: "Draft",
         current: false,
         isDefault: false,
         worktreePath: null,
@@ -145,11 +145,11 @@ describe("dedupeRemoteBranchesWithLocalMatches", () => {
 
     expect(dedupeRemoteBranchesWithLocalMatches(input).map((branch) => branch.name)).toEqual([
       "feature/local",
-      "CUT3/feature/remote-only",
+      "Draft/feature/remote-only",
     ]);
   });
 
-  it("keeps non-CUT3 remote refs visible even when a matching local branch exists", () => {
+  it("keeps non-Draft remote refs visible even when a matching local branch exists", () => {
     const input: GitBranch[] = [
       {
         name: "feature/demo",
@@ -173,7 +173,7 @@ describe("dedupeRemoteBranchesWithLocalMatches", () => {
     ]);
   });
 
-  it("keeps non-CUT3 remote refs visible when git tracks with first-slash local naming", () => {
+  it("keeps non-Draft remote refs visible when git tracks with first-slash local naming", () => {
     const input: GitBranch[] = [
       {
         name: "upstream/feature",
@@ -203,15 +203,15 @@ describe("resolveBranchSelectionTarget", () => {
     expect(
       resolveBranchSelectionTarget({
         activeProjectCwd: "/repo",
-        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
+        activeWorktreePath: "/repo/.draft/worktrees/feature-a",
         branch: {
           isDefault: false,
-          worktreePath: "/repo/.t3/worktrees/feature-b",
+          worktreePath: "/repo/.draft/worktrees/feature-b",
         },
       }),
     ).toEqual({
-      checkoutCwd: "/repo/.t3/worktrees/feature-b",
-      nextWorktreePath: "/repo/.t3/worktrees/feature-b",
+      checkoutCwd: "/repo/.draft/worktrees/feature-b",
+      nextWorktreePath: "/repo/.draft/worktrees/feature-b",
       reuseExistingWorktree: true,
     });
   });
@@ -220,7 +220,7 @@ describe("resolveBranchSelectionTarget", () => {
     expect(
       resolveBranchSelectionTarget({
         activeProjectCwd: "/repo",
-        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
+        activeWorktreePath: "/repo/.draft/worktrees/feature-a",
         branch: {
           isDefault: true,
           worktreePath: "/repo",
@@ -237,7 +237,7 @@ describe("resolveBranchSelectionTarget", () => {
     expect(
       resolveBranchSelectionTarget({
         activeProjectCwd: "/repo",
-        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
+        activeWorktreePath: "/repo/.draft/worktrees/feature-a",
         branch: {
           isDefault: true,
           worktreePath: null,
@@ -254,15 +254,15 @@ describe("resolveBranchSelectionTarget", () => {
     expect(
       resolveBranchSelectionTarget({
         activeProjectCwd: "/repo",
-        activeWorktreePath: "/repo/.t3/worktrees/feature-a",
+        activeWorktreePath: "/repo/.draft/worktrees/feature-a",
         branch: {
           isDefault: false,
           worktreePath: null,
         },
       }),
     ).toEqual({
-      checkoutCwd: "/repo/.t3/worktrees/feature-a",
-      nextWorktreePath: "/repo/.t3/worktrees/feature-a",
+      checkoutCwd: "/repo/.draft/worktrees/feature-a",
+      nextWorktreePath: "/repo/.draft/worktrees/feature-a",
       reuseExistingWorktree: false,
     });
   });

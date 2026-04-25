@@ -6,7 +6,7 @@
  *
  * @module TerminalCommandRunner
  */
-import { TerminalExecEvent, TerminalExecInput, TerminalExecResult } from "@t3tools/contracts";
+import { TerminalExecEvent, TerminalExecInput, TerminalExecResult } from "@draft/contracts";
 import { Effect, Schema, ServiceMap } from "effect";
 
 export class TerminalCommandRunnerError extends Schema.TaggedErrorClass<TerminalCommandRunnerError>()(
@@ -27,4 +27,4 @@ export interface TerminalCommandRunnerShape {
 export class TerminalCommandRunner extends ServiceMap.Service<
   TerminalCommandRunner,
   TerminalCommandRunnerShape
->()("t4code/terminal/Services/CommandRunner/TerminalCommandRunner") {}
+>()("draft/terminal/Services/CommandRunner/TerminalCommandRunner") {}

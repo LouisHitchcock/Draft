@@ -1,6 +1,6 @@
 # Encyclopedia
 
-This is a living glossary for CUT3. It explains what common terms mean in this codebase.
+This is a living glossary for Draft. It explains what common terms mean in this codebase.
 
 ## Table of contents
 
@@ -29,7 +29,7 @@ A Git worktree used as an isolated workspace for a thread. If a thread has a `wo
 
 #### Repo-local skill
 
-A repo-owned instruction artifact discovered from `.cut3/skills/<name>/SKILL.md` and attachable per turn from the composer. Each skill must declare `name` and `description`, and `name` must match the lowercase hyphenated directory name. See [projectWorkspaceMetadata.ts][32] and [ComposerSkillPicker.tsx][33].
+A repo-owned instruction artifact discovered from `.draft/skills/<name>/SKILL.md` and attachable per turn from the composer. Each skill must declare `name` and `description`, and `name` must match the lowercase hyphenated directory name. See [projectWorkspaceMetadata.ts][32] and [ComposerSkillPicker.tsx][33].
 
 ### Thread timeline
 
@@ -51,7 +51,7 @@ A new thread created from an existing thread's current state, a selected message
 
 #### Thread export
 
-A client-side snapshot of a thread that CUT3 can download as markdown or JSON, or save into the workspace. Exports include messages, proposed plans, derived tasks, curated work-log entries, checkpoint diff summaries, and attachment metadata. See [README.md][25].
+A client-side snapshot of a thread that Draft can download as markdown or JSON, or save into the workspace. Exports include messages, proposed plans, derived tasks, curated work-log entries, checkpoint diff summaries, and attachment metadata. See [README.md][25].
 
 #### Shared thread
 
@@ -67,7 +67,7 @@ A thread action that writes a continuation boundary so future turns can keep wor
 
 #### Continuation summary
 
-The persisted compacted summary CUT3 carries forward after thread compaction or share import. It preserves active goals, plan state, and other thread context for the next turn. See [threadArtifacts.ts][28] and [README.md][25].
+The persisted compacted summary Draft carries forward after thread compaction or share import. It preserves active goals, plan state, and other thread context for the next turn. See [threadArtifacts.ts][28] and [README.md][25].
 
 #### Thread undo/redo
 

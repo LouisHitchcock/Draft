@@ -6,7 +6,7 @@
  *
  * @module ProjectionStateRepository
  */
-import { IsoDateTime, NonNegativeInt } from "@t3tools/contracts";
+import { IsoDateTime, NonNegativeInt } from "@draft/contracts";
 import { Option, Schema, ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -61,4 +61,4 @@ export interface ProjectionStateRepositoryShape {
 export class ProjectionStateRepository extends ServiceMap.Service<
   ProjectionStateRepository,
   ProjectionStateRepositoryShape
->()("t4code/persistence/Services/ProjectionState/ProjectionStateRepository") {}
+>()("draft/persistence/Services/ProjectionState/ProjectionStateRepository") {}

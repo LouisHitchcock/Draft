@@ -243,19 +243,19 @@ export const MODEL_CONTEXT_WINDOW_INFO_BY_PROVIDER = {
   kimi: {
     "kimi-for-coding": {
       source: "provider-config",
-      note: "CUT3 only writes a 262,144-token max_context_size when launching an API-key-backed Kimi temp config. Login-backed sessions rely on the runtime's own config and may differ.",
+      note: "Draft only writes a 262,144-token max_context_size when launching an API-key-backed Kimi temp config. Login-backed sessions rely on the runtime's own config and may differ.",
     },
   },
   opencode: {
     [OPENCODE_DEFAULT_MODEL]: {
       source: "provider-config",
-      note: "CUT3 leaves model selection to OpenCode's own provider/config defaults until the session advertises a concrete model list.",
+      note: "Draft leaves model selection to OpenCode's own provider/config defaults until the session advertises a concrete model list.",
     },
   },
   pi: {
     [PI_DEFAULT_MODEL]: {
       source: "provider-config",
-      note: "CUT3 lets Pi choose its configured default provider/model until the active Pi session advertises a concrete authenticated model list.",
+      note: "Draft lets Pi choose its configured default provider/model until the active Pi session advertises a concrete authenticated model list.",
     },
   },
 } as const satisfies Record<ProviderKind, Record<string, ModelContextWindowInfo>>;

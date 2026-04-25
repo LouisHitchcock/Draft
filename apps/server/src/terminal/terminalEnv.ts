@@ -2,7 +2,7 @@ const TERMINAL_ENV_BLOCKLIST = new Set(["PORT", "ELECTRON_RENDERER_PORT", "ELECT
 
 export function shouldExcludeTerminalEnvKey(key: string): boolean {
   const normalizedKey = key.toUpperCase();
-  if (normalizedKey.startsWith("CUT3_")) {
+  if (normalizedKey.startsWith("DRAFT_")) {
     return true;
   }
   if (normalizedKey.startsWith("VITE_")) {

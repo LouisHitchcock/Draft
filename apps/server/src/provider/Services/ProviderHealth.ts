@@ -6,7 +6,7 @@
  *
  * @module ProviderHealth
  */
-import type { ServerProviderStatus } from "@t3tools/contracts";
+import type { ServerProviderStatus } from "@draft/contracts";
 import { ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -18,5 +18,5 @@ export interface ProviderHealthShape {
 }
 
 export class ProviderHealth extends ServiceMap.Service<ProviderHealth, ProviderHealthShape>()(
-  "t4code/provider/Services/ProviderHealth",
+  "draft/provider/Services/ProviderHealth",
 ) {}

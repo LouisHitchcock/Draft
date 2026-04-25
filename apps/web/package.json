@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/web",
+  "name": "@draft/web",
   "version": "1.0.1",
   "private": true,
   "type": "module",
@@ -21,8 +21,8 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@lexical/react": "^0.41.0",
     "@pierre/diffs": "^1.1.3",
-    "@t3tools/contracts": "workspace:*",
-    "@t3tools/shared": "workspace:*",
+    "@draft/contracts": "workspace:*",
+    "@draft/shared": "workspace:*",
     "@tanstack/react-pacer": "^0.19.4",
     "@tanstack/react-query": "^5.95.2",
     "@tanstack/react-router": "^1.168.4",

@@ -7,7 +7,7 @@ import {
   type ThreadShareSnapshot as ThreadShareSnapshotType,
   type ThreadShareSummary as ThreadShareSummaryType,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Schema } from "effect";
 
 import { readStateJsonFile, writeStateJsonFile } from "./stateJsonFile.ts";

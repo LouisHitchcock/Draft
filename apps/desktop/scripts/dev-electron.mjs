@@ -1,7 +1,8 @@
 import { spawn, spawnSync } from "node:child_process";
 import { watch } from "node:fs";
+import { access } from "node:fs/promises";
+import net from "node:net";
 import { join } from "node:path";
-import waitOn from "wait-on";
 
 import {
   desktopDir,
@@ -23,10 +24,59 @@ const watchedDirectories = [
 const forcedShutdownTimeoutMs = 1_500;
 const restartDebounceMs = 120;
 const childTreeGracePeriodMs = 1_200;
+const startupPollIntervalMs = 150;
+const startupTimeoutMs = 60_000;
 
-await waitOn({
-  resources: [`tcp:${port}`, ...requiredFiles.map((filePath) => `file:${filePath}`)],
-});
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fileExists(filePath) {
+  try {
+    await access(join(desktopDir, filePath));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function tcpPortReady(portNumber) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: "127.0.0.1", port: portNumber });
+    const finish = (ready) => {
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(ready);
+    };
+
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+    socket.setTimeout(1_000, () => finish(false));
+  });
+}
+
+async function waitForDevReady() {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < startupTimeoutMs) {
+    const [portReady, ...fileReady] = await Promise.all([
+      tcpPortReady(port),
+      ...requiredFiles.map((filePath) => fileExists(filePath)),
+    ]);
+
+    if (portReady && fileReady.every(Boolean)) {
+      return;
+    }
+
+    await wait(startupPollIntervalMs);
+  }
+
+  throw new Error(
+    `Timed out waiting for desktop dev prerequisites (port ${port}, files: ${requiredFiles.join(", ")})`,
+  );
+}
+
+await waitForDevReady();
 
 const childEnv = { ...process.env };
 delete childEnv.ELECTRON_RUN_AS_NODE;
@@ -51,7 +101,7 @@ function cleanupStaleDevApps() {
     return;
   }
 
-  spawnSync("pkill", ["-f", "--", `--cut3-dev-root=${desktopDir}`], { stdio: "ignore" });
+  spawnSync("pkill", ["-f", "--", `--draft-dev-root=${desktopDir}`], { stdio: "ignore" });
 }
 
 function startApp() {
@@ -63,13 +113,13 @@ function startApp() {
   const linuxDesktopLaunchEnv = resolveLinuxDesktopLaunchEnv({
     electronBinaryPath: electronPath,
     mainEntryPath: "dist-electron/main.js",
-    extraArgs: [`--cut3-dev-root=${desktopDir}`],
+    extraArgs: [`--draft-dev-root=${desktopDir}`],
     extraEnv: {
       VITE_DEV_SERVER_URL: devServerUrl,
     },
   });
 
-  const app = spawn(electronPath, [`--cut3-dev-root=${desktopDir}`, "dist-electron/main.js"], {
+  const app = spawn(electronPath, [`--draft-dev-root=${desktopDir}`, "dist-electron/main.js"], {
     cwd: desktopDir,
     env: {
       ...childEnv,

@@ -12,7 +12,7 @@ import {
   OrchestrationSessionStatus,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Option, Schema, ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -73,4 +73,4 @@ export interface ProjectionThreadSessionRepositoryShape {
 export class ProjectionThreadSessionRepository extends ServiceMap.Service<
   ProjectionThreadSessionRepository,
   ProjectionThreadSessionRepositoryShape
->()("t4code/persistence/Services/ProjectionThreadSessions/ProjectionThreadSessionRepository") {}
+>()("draft/persistence/Services/ProjectionThreadSessions/ProjectionThreadSessionRepository") {}

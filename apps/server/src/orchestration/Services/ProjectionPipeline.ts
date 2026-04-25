@@ -6,7 +6,7 @@
  *
  * @module OrchestrationProjectionPipeline
  */
-import type { OrchestrationEvent } from "@t3tools/contracts";
+import type { OrchestrationEvent } from "@draft/contracts";
 import { ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -39,4 +39,4 @@ export interface OrchestrationProjectionPipelineShape {
 export class OrchestrationProjectionPipeline extends ServiceMap.Service<
   OrchestrationProjectionPipeline,
   OrchestrationProjectionPipelineShape
->()("t4code/orchestration/Services/ProjectionPipeline/OrchestrationProjectionPipeline") {}
+>()("draft/orchestration/Services/ProjectionPipeline/OrchestrationProjectionPipeline") {}

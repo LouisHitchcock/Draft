@@ -4,7 +4,7 @@ import {
   MessageId,
   TurnId,
   type OrchestrationThreadActivity,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -969,7 +969,7 @@ describe("deriveWorkLogEntries", () => {
               command: ["cmd", "/c", "echo shell=cmd && cd && ver"],
               result: {
                 content:
-                  "shell=cmd\\nC:\\\\Users\\\\Louis\\\\Desktop\\\\Code\\\\T4-Code\\nMicrosoft Windows [Version 10.0.26200.8246]\\n",
+                  "shell=cmd\\nC:\\\\Users\\\\Louis\\\\Desktop\\\\Code\\\\Draft\\nMicrosoft Windows [Version 10.0.26200.8246]\\n",
               },
             },
           },

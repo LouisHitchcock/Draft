@@ -1,4 +1,4 @@
-import { ProjectId, ThreadId, TurnId } from "@t3tools/contracts";
+import { ProjectId, ThreadId, TurnId } from "@draft/contracts";
 import { describe, expect, it } from "vitest";
 import type { Project, Thread } from "../types";
 import { buildSidebarProjectEntries, hasUnseenCompletion } from "./Sidebar.logic";

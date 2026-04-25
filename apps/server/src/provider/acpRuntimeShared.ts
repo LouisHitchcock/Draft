@@ -1,7 +1,7 @@
 import { type ChildProcessWithoutNullStreams, spawnSync } from "node:child_process";
 
 import * as acp from "@agentclientprotocol/sdk";
-import type { ProviderApprovalDecision } from "@t3tools/contracts";
+import type { ProviderApprovalDecision } from "@draft/contracts";
 
 export type AcpPermissionRequestType =
   | "command_execution_approval"

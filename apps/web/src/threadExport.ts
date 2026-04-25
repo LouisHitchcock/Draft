@@ -1,4 +1,4 @@
-import type { ProviderKind } from "@t3tools/contracts";
+import type { ProviderKind } from "@draft/contracts";
 
 import { summarizeTurnDiffStats } from "./lib/turnDiffTree";
 import type { ThreadTask, WorkLogEntry } from "./session-logic";

@@ -42,7 +42,7 @@ import {
   WS_CHANNELS,
   WS_METHODS,
   type WsWelcomePayload,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Schema } from "effect";
 
 import { showContextMenuFallback } from "./contextMenuFallback";

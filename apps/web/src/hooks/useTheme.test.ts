@@ -60,7 +60,7 @@ describe("resolveAppliedCustomTheme", () => {
     expect(resolveAppliedCustomTheme("catppuccin-auto", "dark")?.label).toBe("Catppuccin Mocha");
     expect(resolveAppliedCustomTheme("lilac", "dark")?.label).toBe("Lilac");
     expect(resolveAppliedCustomTheme("github-dark-dimmed", "light")?.appearance).toBe("dark");
-    expect(resolveAppliedCustomTheme("t3-chat-theme", "dark")?.label).toBe("T3 Chat Theme");
+    expect(resolveAppliedCustomTheme("draft-chat-theme", "dark")?.label).toBe("Draft Chat Theme");
     expect(resolveAppliedCustomTheme("amoled-github", "dark")?.label).toBe("AMOLED GitHub");
     expect(resolveAppliedCustomTheme("amoled-github", "dark")?.appearance).toBe("dark");
   });
@@ -71,7 +71,7 @@ describe("resolvePinnedCustomThemeAppearance", () => {
     expect(resolvePinnedCustomThemeAppearance("catppuccin-latte")).toBe("light");
     expect(resolvePinnedCustomThemeAppearance("lilac")).toBe("dark");
     expect(resolvePinnedCustomThemeAppearance("nord")).toBe("dark");
-    expect(resolvePinnedCustomThemeAppearance("t3-chat-theme")).toBe("dark");
+    expect(resolvePinnedCustomThemeAppearance("draft-chat-theme")).toBe("dark");
     expect(resolvePinnedCustomThemeAppearance("amoled-github")).toBe("dark");
     expect(resolvePinnedCustomThemeAppearance("catppuccin-auto")).toBeNull();
     expect(resolvePinnedCustomThemeAppearance("none")).toBeNull();

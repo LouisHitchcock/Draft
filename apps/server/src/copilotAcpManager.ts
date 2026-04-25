@@ -18,7 +18,7 @@ import {
   TurnId,
   type CopilotReasoningEffort,
   type ProviderTurnStartResult,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 
 import {
   createPermissionOutcome,
@@ -855,7 +855,7 @@ export class CopilotAcpManager extends EventEmitter<CopilotAcpManagerEvents> {
   }
 
   async respondToUserInput(): Promise<void> {
-    throw new Error("GitHub Copilot CLI does not expose structured user input requests in CUT3.");
+    throw new Error("GitHub Copilot CLI does not expose structured user input requests in Draft.");
   }
 
   async stopSession(threadId: ThreadId): Promise<void> {

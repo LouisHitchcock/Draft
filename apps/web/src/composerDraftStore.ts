@@ -7,15 +7,15 @@ import {
   type ProviderInteractionMode,
   type ProviderReasoningLevel,
   type RuntimeMode,
-} from "@t3tools/contracts";
-import { normalizeModelSlug } from "@t3tools/shared/model";
+} from "@draft/contracts";
+import { normalizeModelSlug } from "@draft/shared/model";
 import { DEFAULT_INTERACTION_MODE, DEFAULT_RUNTIME_MODE, type ChatImageAttachment } from "./types";
 import { Debouncer } from "@tanstack/react-pacer";
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 
-export const COMPOSER_DRAFT_STORAGE_KEY = "t4code:composer-drafts:v1";
-const LEGACY_COMPOSER_DRAFT_STORAGE_KEY = "cut3:composer-drafts:v1";
+export const COMPOSER_DRAFT_STORAGE_KEY = "draft:composer-drafts:v1";
+const LEGACY_COMPOSER_DRAFT_STORAGE_KEY = "draft:composer-drafts:v1";
 export type DraftThreadEnvMode = "local" | "worktree";
 
 const COMPOSER_PERSIST_DEBOUNCE_MS = 300;

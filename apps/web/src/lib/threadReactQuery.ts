@@ -1,6 +1,6 @@
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/react-query";
 
-import type { ProjectId, ThreadId, ThreadShareId } from "@t3tools/contracts";
+import type { ProjectId, ThreadId, ThreadShareId } from "@draft/contracts";
 
 import { ensureNativeApi } from "../nativeApi";
 

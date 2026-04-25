@@ -1,4 +1,4 @@
-import { type KeybindingShortcut } from "@t3tools/contracts";
+import { type KeybindingShortcut } from "@draft/contracts";
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";

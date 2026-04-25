@@ -1,4 +1,4 @@
-import { ThreadId } from "@t3tools/contracts";
+import { ThreadId } from "@draft/contracts";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -55,9 +55,9 @@ describe("kimiAcpManager model availability", () => {
       buildKimiCliArgs({
         runtimeMode: "approval-required",
         model: "kimi-for-coding",
-        configFilePath: "/tmp/cut3-kimi/config.json",
+        configFilePath: "/tmp/draft-kimi/config.json",
       }),
-    ).toEqual(["--config-file", "/tmp/cut3-kimi/config.json", "--model", "kimi-for-coding", "acp"]);
+    ).toEqual(["--config-file", "/tmp/draft-kimi/config.json", "--model", "kimi-for-coding", "acp"]);
   });
 
   it("overrides inherited Kimi env vars with the selected model and API key", () => {
@@ -103,7 +103,7 @@ describe("kimiAcpManager model availability", () => {
     ).toEqual({
       default_model: "kimi-k2-thinking",
       providers: {
-        "cut3-kimi": {
+        "draft-kimi": {
           type: "kimi",
           base_url: "https://api.kimi.com/coding/v1",
           api_key: "sk-kimi-test",
@@ -111,12 +111,12 @@ describe("kimiAcpManager model availability", () => {
       },
       models: {
         "kimi-k2-thinking": {
-          provider: "cut3-kimi",
+          provider: "draft-kimi",
           model: "kimi-k2-thinking",
           max_context_size: 262144,
         },
         "kimi-for-coding": {
-          provider: "cut3-kimi",
+          provider: "draft-kimi",
           model: "kimi-for-coding",
           max_context_size: 262144,
         },
@@ -153,7 +153,7 @@ describe("kimiAcpManager model availability", () => {
         },
       }),
     ).toBe(
-      "Kimi Code CLI requires authentication. Run `kimi login`, or start `kimi` and run `/login`, or add a Kimi API key in CUT3 Settings and try again.",
+      "Kimi Code CLI requires authentication. Run `kimi login`, or start `kimi` and run `/login`, or add a Kimi API key in Draft Settings and try again.",
     );
   });
 

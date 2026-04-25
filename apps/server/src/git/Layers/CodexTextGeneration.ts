@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 
-import { DEFAULT_MODEL_BY_PROVIDER } from "@t3tools/contracts";
+import { DEFAULT_MODEL_BY_PROVIDER } from "@draft/contracts";
 import { Effect, FileSystem, Layer, Option, Path, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
-import { sanitizeBranchFragment, sanitizeFeatureBranchName } from "@t3tools/shared/git";
+import { sanitizeBranchFragment, sanitizeFeatureBranchName } from "@draft/shared/git";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
@@ -131,7 +131,7 @@ const makeCodexTextGeneration = Effect.gen(function* () {
     prefix: string,
     content: string,
   ): Effect.Effect<string, TextGenerationError> => {
-    const filePath = path.join(tempDir, `cut3-${prefix}-${process.pid}-${randomUUID()}.tmp`);
+    const filePath = path.join(tempDir, `draft-${prefix}-${process.pid}-${randomUUID()}.tmp`);
     return fileSystem.writeFileString(filePath, content).pipe(
       Effect.mapError(
         (cause) =>

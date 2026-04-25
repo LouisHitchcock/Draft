@@ -23,7 +23,7 @@ export const APPLIED_CUSTOM_THEME_IDS = [
   "lilac",
   "nord",
   "visual-studio-2017-dark",
-  "t3-chat-theme",
+  "draft-chat-theme",
 ] as const;
 
 export type AppliedCustomThemeId = (typeof APPLIED_CUSTOM_THEME_IDS)[number];
@@ -32,7 +32,7 @@ export interface AppliedCustomTheme {
   id: AppliedCustomThemeId;
   label: string;
   description: string;
-  family: "amoled-github" | "catppuccin" | "github" | "lilac" | "nord" | "visual-studio" | "t3";
+  family: "amoled-github" | "catppuccin" | "github" | "lilac" | "nord" | "visual-studio" | "draft";
   appearance: ThemeAppearance;
   dataTheme: AppliedCustomThemeId;
   diffThemeName: SupportedHighlighterThemeName;
@@ -129,13 +129,13 @@ export const APPLIED_CUSTOM_THEMES = {
     dataTheme: "visual-studio-2017-dark",
     diffThemeName: "dark-plus",
   },
-  "t3-chat-theme": {
-    id: "t3-chat-theme",
-    label: "T3 Chat Theme",
-    description: "A deep plum chat-first palette inspired by T3 Chat.",
-    family: "t3",
+  "draft-chat-theme": {
+    id: "draft-chat-theme",
+    label: "Draft Chat Theme",
+    description: "A deep plum chat-first palette inspired by Draft.",
+    family: "draft",
     appearance: "dark",
-    dataTheme: "t3-chat-theme",
+    dataTheme: "draft-chat-theme",
     diffThemeName: "catppuccin-mocha",
   },
 } as const satisfies Record<AppliedCustomThemeId, AppliedCustomTheme>;
@@ -156,7 +156,7 @@ export const CUSTOM_THEME_OPTIONS = [
   {
     id: "none",
     label: "Default theme",
-    description: "Use CUT3's built-in theme tokens.",
+    description: "Use Draft's built-in theme tokens.",
     family: "default",
     appearance: null,
   },

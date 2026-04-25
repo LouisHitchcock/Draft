@@ -17,19 +17,19 @@ import {
   ProjectSkill as ProjectSkillSchema,
   type ProjectSkillIssue,
   type ProjectSkillName,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Schema } from "effect";
 
 const AGENTS_FILE_NAME = "AGENTS.md";
-const COMMANDS_DIRECTORY_RELATIVE_PATH = ".t4code/commands";
-const LEGACY_COMMANDS_DIRECTORY_RELATIVE_PATH = ".cut3/commands";
-const SKILLS_DIRECTORY_RELATIVE_PATH = ".t4code/skills";
-const LEGACY_SKILLS_DIRECTORY_RELATIVE_PATH = ".cut3/skills";
+const COMMANDS_DIRECTORY_RELATIVE_PATH = ".draft/commands";
+const LEGACY_COMMANDS_DIRECTORY_RELATIVE_PATH = ".draft/commands";
+const SKILLS_DIRECTORY_RELATIVE_PATH = ".draft/skills";
+const LEGACY_SKILLS_DIRECTORY_RELATIVE_PATH = ".draft/skills";
 const SKILL_FILE_NAME = "SKILL.md";
-const INIT_SECTION_START = "<!-- T4CODE_INIT:START -->";
-const INIT_SECTION_END = "<!-- T4CODE_INIT:END -->";
-const LEGACY_INIT_SECTION_START = "<!-- CUT3_INIT:START -->";
-const LEGACY_INIT_SECTION_END = "<!-- CUT3_INIT:END -->";
+const INIT_SECTION_START = "<!-- DRAFT_INIT:START -->";
+const INIT_SECTION_END = "<!-- DRAFT_INIT:END -->";
+const LEGACY_INIT_SECTION_START = "<!-- DRAFT_INIT:START -->";
+const LEGACY_INIT_SECTION_END = "<!-- DRAFT_INIT:END -->";
 
 function resolveProjectRelativeDirectory(cwd: string, preferred: string, legacy: string): string {
   const preferredAbsolutePath = path.join(cwd, preferred);

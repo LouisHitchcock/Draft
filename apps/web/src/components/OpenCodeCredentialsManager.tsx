@@ -1,4 +1,4 @@
-import type { ServerMcpServerAuthStatus, ServerOpenCodeConfigSource } from "@t3tools/contracts";
+import type { ServerMcpServerAuthStatus, ServerOpenCodeConfigSource } from "@draft/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { memo, useMemo, useState } from "react";
 import {
@@ -127,7 +127,7 @@ export const OpenCodeCredentialsManager = memo(function OpenCodeCredentialsManag
           <h3 className="text-xs font-medium text-foreground">OpenCode runtime</h3>
         </div>
         <p className="text-xs text-muted-foreground">
-          CUT3 reads <code>{binaryCommand} auth list</code>, <code>{binaryCommand} mcp list</code>,
+          Draft reads <code>{binaryCommand} auth list</code>, <code>{binaryCommand} mcp list</code>,
           and <code>{binaryCommand} mcp auth list</code>. OpenCode still owns the actual login,
           logout, and OAuth flows.
         </p>
@@ -256,7 +256,7 @@ export const OpenCodeCredentialsManager = memo(function OpenCodeCredentialsManag
         </div>
         {!mcpSupported ? (
           <p className="text-xs text-muted-foreground">
-            CUT3 could not inspect OpenCode MCP servers from this runtime snapshot.
+            Draft could not inspect OpenCode MCP servers from this runtime snapshot.
           </p>
         ) : mcpServers.length === 0 ? (
           <p className="text-xs text-muted-foreground">

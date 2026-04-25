@@ -4,7 +4,7 @@
  * Opens with Ctrl+Shift+P / Cmd+Shift+P and provides quick access to
  * all major app actions with their keyboard shortcuts displayed.
  */
-import { type KeybindingCommand, type ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import { type KeybindingCommand, type ResolvedKeybindingsConfig } from "@draft/contracts";
 import {
   FilePlusIcon,
   FolderPlusIcon,

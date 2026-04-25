@@ -8,5 +8,5 @@ export interface PiAdapterShape extends ProviderAdapterShape<ProviderAdapterErro
 }
 
 export class PiAdapter extends ServiceMap.Service<PiAdapter, PiAdapterShape>()(
-  "t4code/provider/Services/PiAdapter",
+  "draft/provider/Services/PiAdapter",
 ) {}

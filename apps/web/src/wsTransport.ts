@@ -5,9 +5,9 @@ import {
   WebSocketResponse,
   type WsResponse as WsResponseMessage,
   WsResponse as WsResponseSchema,
-} from "@t3tools/contracts";
-import { decodeUnknownJsonResult, formatSchemaError } from "@t3tools/shared/schemaJson";
-import { redactWsAuthToken } from "@t3tools/shared/wsAuth";
+} from "@draft/contracts";
+import { decodeUnknownJsonResult, formatSchemaError } from "@draft/shared/schemaJson";
+import { redactWsAuthToken } from "@draft/shared/wsAuth";
 import { Exit, Result, Schema } from "effect";
 import { resolveConfiguredWsUrl } from "./lib/serverUrl";
 

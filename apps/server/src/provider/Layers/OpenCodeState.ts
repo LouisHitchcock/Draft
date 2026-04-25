@@ -14,7 +14,7 @@ import type {
   ServerOpenCodeStateInput,
   ServerOpenCodeAddCredentialInput,
   ServerOpenCodeRemoveCredentialInput,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Effect, Layer } from "effect";
 
 import { type ProcessRunResult, runProcess } from "../../processRunner";

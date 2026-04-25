@@ -1,4 +1,4 @@
-import type { CommandId, ProviderStartOptions } from "@t3tools/contracts";
+import type { CommandId, ProviderStartOptions } from "@draft/contracts";
 
 const TURN_START_OPTIONS_TTL_MS = 5 * 60 * 1000;
 

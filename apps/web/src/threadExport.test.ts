@@ -1,4 +1,4 @@
-import { CheckpointRef, MessageId, ProjectId, ThreadId, TurnId } from "@t3tools/contracts";
+import { CheckpointRef, MessageId, ProjectId, ThreadId, TurnId } from "@draft/contracts";
 import { describe, expect, it } from "vitest";
 
 import type { ThreadTask, WorkLogEntry } from "./session-logic";

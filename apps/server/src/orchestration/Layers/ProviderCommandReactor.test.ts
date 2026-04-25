@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type { ProviderRuntimeEvent, ProviderSession, ServerProviderStatus } from "@t3tools/contracts";
+import type { ProviderRuntimeEvent, ProviderSession, ServerProviderStatus } from "@draft/contracts";
 import {
   ApprovalRequestId,
   CommandId,
@@ -12,7 +12,7 @@ import {
   ProjectId,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { Effect, Exit, Layer, ManagedRuntime, PubSub, Scope, Stream } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -94,7 +94,7 @@ describe("ProviderCommandReactor", () => {
     >;
   }) {
     const now = new Date().toISOString();
-    const stateDir = input?.stateDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "cut3-reactor-"));
+    const stateDir = input?.stateDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "draft-reactor-"));
     const workspaceRoot = input?.workspaceRoot ?? "/tmp/provider-project";
     fs.mkdirSync(workspaceRoot, { recursive: true });
     createdStateDirs.add(stateDir);
@@ -330,7 +330,7 @@ describe("ProviderCommandReactor", () => {
   });
 
   it("injects workspace AGENTS.md instructions into provider turn input", async () => {
-    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cut3-reactor-workspace-"));
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "draft-reactor-workspace-"));
     fs.writeFileSync(
       path.join(workspaceRoot, "AGENTS.md"),
       ["# AGENTS.md", "", "Always mention the release checklist."].join("\n"),

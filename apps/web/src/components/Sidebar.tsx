@@ -36,7 +36,7 @@ import {
   ThreadId,
   type GitStatusResult,
   type ResolvedKeybindingsConfig,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import { useAppSettings } from "../appSettings";
@@ -123,7 +123,7 @@ function getSidebarCopy(language: AppLanguage) {
       failedToRenameThread: "تغییر نام رشته انجام نشد",
       keepingOrphanedWorktree: "worktree یتیم حفظ شد",
       orphanedWorktreeKeptForSafety: (path: string) =>
-        `CUT3 نتوانست بررسی کند که ${path} تغییرات ثبت نشده دارد یا نه، بنابراین worktree برای ایمنی حفظ می شود.`,
+        `Draft نتوانست بررسی کند که ${path} تغییرات ثبت نشده دارد یا نه، بنابراین worktree برای ایمنی حفظ می شود.`,
       orphanedWorktreeWithChangesPrompt: (path: string) =>
         [
           "این رشته تنها رشته متصل به این worktree است:",
@@ -223,7 +223,7 @@ function getSidebarCopy(language: AppLanguage) {
     failedToRenameThread: "Failed to rename thread",
     keepingOrphanedWorktree: "Keeping orphaned worktree",
     orphanedWorktreeKeptForSafety: (path: string) =>
-      `CUT3 could not verify whether ${path} has uncommitted changes, so the worktree will be kept for safety.`,
+      `Draft could not verify whether ${path} has uncommitted changes, so the worktree will be kept for safety.`,
     orphanedWorktreeWithChangesPrompt: (path: string) =>
       [
         "This thread is the only one linked to this worktree:",

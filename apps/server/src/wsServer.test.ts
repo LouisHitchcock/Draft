@@ -32,7 +32,7 @@ import {
   type WsPushChannel,
   type WsPushMessage,
   type WsPush,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { compileResolvedKeybindingRule, DEFAULT_KEYBINDINGS } from "./keybindings";
 import type {
   TerminalClearInput,
@@ -44,7 +44,7 @@ import type {
   TerminalResizeInput,
   TerminalSessionSnapshot,
   TerminalWriteInput,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { TerminalManager, type TerminalManagerShape } from "./terminal/Services/Manager";
 import { makeSqlitePersistenceLive, SqlitePersistenceMemory } from "./persistence/Layers/Sqlite";
 import { SqlClient, SqlError } from "effect/unstable/sql";
@@ -59,7 +59,7 @@ import { clearTransientTurnStartProviderOptions } from "./provider/transientProv
 import { GitCommandError, GitManagerError } from "./git/Errors.ts";
 import { MigrationError } from "@effect/sql-sqlite-bun/SqliteMigrator";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService.ts";
-import { buildBangCommandTerminalId } from "@t3tools/shared/terminalRun";
+import { buildBangCommandTerminalId } from "@draft/shared/terminalRun";
 
 const asEventId = (value: string): EventId => EventId.makeUnsafe(value);
 const asProviderItemId = (value: string): ProviderItemId => ProviderItemId.makeUnsafe(value);
@@ -531,7 +531,7 @@ describe("WebSocket Server", () => {
       throw new Error("Test server is already running");
     }
 
-    const stateDir = options.stateDir ?? makeTempDir("cut3-ws-state-");
+    const stateDir = options.stateDir ?? makeTempDir("draft-ws-state-");
     const scope = await Effect.runPromise(Scope.make("sequential"));
     const persistenceLayer = options.persistenceLayer ?? SqlitePersistenceMemory;
     const providerLayer = options.providerLayer ?? makeServerProviderLayer();
@@ -635,7 +635,7 @@ describe("WebSocket Server", () => {
   });
 
   it("serves persisted attachments from stateDir", async () => {
-    const stateDir = makeTempDir("cut3-state-attachments-");
+    const stateDir = makeTempDir("draft-state-attachments-");
     const attachmentPath = path.join(stateDir, "attachments", "thread-a", "message-a", "0.png");
     fs.mkdirSync(path.dirname(attachmentPath), { recursive: true });
     fs.writeFileSync(attachmentPath, Buffer.from("hello-attachment"));
@@ -653,7 +653,7 @@ describe("WebSocket Server", () => {
   });
 
   it("serves persisted attachments for URL-encoded paths", async () => {
-    const stateDir = makeTempDir("cut3-state-attachments-encoded-");
+    const stateDir = makeTempDir("draft-state-attachments-encoded-");
     const attachmentPath = path.join(
       stateDir,
       "attachments",
@@ -679,7 +679,7 @@ describe("WebSocket Server", () => {
   });
 
   it("requires the auth token for attachment routes when auth is enabled", async () => {
-    const stateDir = makeTempDir("cut3-state-attachments-auth-");
+    const stateDir = makeTempDir("draft-state-attachments-auth-");
     const attachmentPath = path.join(stateDir, "attachments", "thread-a", "message-a", "0.png");
     fs.mkdirSync(path.dirname(attachmentPath), { recursive: true });
     fs.writeFileSync(attachmentPath, Buffer.from("hello-attachment"));
@@ -706,7 +706,7 @@ describe("WebSocket Server", () => {
   });
 
   it("rejects attachment routes from unexpected browser origins in unauthenticated web mode", async () => {
-    const stateDir = makeTempDir("cut3-state-attachments-origin-");
+    const stateDir = makeTempDir("draft-state-attachments-origin-");
     const attachmentPath = path.join(stateDir, "attachments", "thread-a", "message-a", "0.png");
     fs.mkdirSync(path.dirname(attachmentPath), { recursive: true });
     fs.writeFileSync(attachmentPath, Buffer.from("hello-attachment"));
@@ -728,8 +728,8 @@ describe("WebSocket Server", () => {
   });
 
   it("requires auth for project favicon requests and limits them to authorized workspaces", async () => {
-    const workspace = makeTempDir("cut3-project-favicon-auth-");
-    const outside = makeTempDir("cut3-project-favicon-auth-outside-");
+    const workspace = makeTempDir("draft-project-favicon-auth-");
+    const outside = makeTempDir("draft-project-favicon-auth-outside-");
     fs.writeFileSync(path.join(workspace, "favicon.svg"), "<svg>workspace</svg>", "utf8");
     fs.writeFileSync(path.join(outside, "favicon.svg"), "<svg>outside</svg>", "utf8");
 
@@ -763,7 +763,7 @@ describe("WebSocket Server", () => {
   });
 
   it("rejects project favicon requests from unexpected browser origins in unauthenticated web mode", async () => {
-    const workspace = makeTempDir("cut3-project-favicon-origin-");
+    const workspace = makeTempDir("draft-project-favicon-origin-");
     fs.writeFileSync(path.join(workspace, "favicon.svg"), "<svg>workspace</svg>", "utf8");
 
     server = await createTestServer({
@@ -786,8 +786,8 @@ describe("WebSocket Server", () => {
   });
 
   it("serves static index for root path", async () => {
-    const stateDir = makeTempDir("cut3-state-static-root-");
-    const staticDir = makeTempDir("cut3-static-root-");
+    const stateDir = makeTempDir("draft-state-static-root-");
+    const staticDir = makeTempDir("draft-static-root-");
     fs.writeFileSync(path.join(staticDir, "index.html"), "<h1>static-root</h1>", "utf8");
 
     server = await createTestServer({ cwd: "/test/project", stateDir, staticDir });
@@ -801,8 +801,8 @@ describe("WebSocket Server", () => {
   });
 
   it("rejects static path traversal attempts", async () => {
-    const stateDir = makeTempDir("cut3-state-static-traversal-");
-    const staticDir = makeTempDir("cut3-static-traversal-");
+    const stateDir = makeTempDir("draft-state-static-traversal-");
+    const staticDir = makeTempDir("draft-static-traversal-");
     fs.writeFileSync(path.join(staticDir, "index.html"), "<h1>safe</h1>", "utf8");
 
     server = await createTestServer({ cwd: "/test/project", stateDir, staticDir });
@@ -902,7 +902,7 @@ describe("WebSocket Server", () => {
   });
 
   it("includes bootstrap ids in welcome when cwd project and thread already exist", async () => {
-    const stateDir = makeTempDir("cut3-state-bootstrap-existing-");
+    const stateDir = makeTempDir("draft-state-bootstrap-existing-");
     const persistenceLayer = makeSqlitePersistenceLive(path.join(stateDir, "state.sqlite")).pipe(
       Layer.provide(NodeServices.layer),
     );
@@ -982,7 +982,7 @@ describe("WebSocket Server", () => {
   });
 
   it("responds to server.getConfig", async () => {
-    const stateDir = makeTempDir("cut3-state-get-config-");
+    const stateDir = makeTempDir("draft-state-get-config-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(keybindingsPath, "[]", "utf8");
 
@@ -1008,7 +1008,7 @@ describe("WebSocket Server", () => {
   });
 
   it("reruns provider health checks for each server.getConfig request", async () => {
-    const stateDir = makeTempDir("cut3-state-get-config-provider-refresh-");
+    const stateDir = makeTempDir("draft-state-get-config-provider-refresh-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(keybindingsPath, "[]", "utf8");
 
@@ -1077,7 +1077,7 @@ describe("WebSocket Server", () => {
   });
 
   it("reports MCP support by provider in server.getConfig", async () => {
-    const stateDir = makeTempDir("cut3-state-get-config-mcp-support-");
+    const stateDir = makeTempDir("draft-state-get-config-mcp-support-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(keybindingsPath, "[]", "utf8");
 
@@ -1122,7 +1122,7 @@ describe("WebSocket Server", () => {
   });
 
   it("surfaces inspected OpenCode MCP servers in server.getConfig", async () => {
-    const stateDir = makeTempDir("cut3-state-get-config-opencode-mcp-");
+    const stateDir = makeTempDir("draft-state-get-config-opencode-mcp-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(keybindingsPath, "[]", "utf8");
 
@@ -1192,7 +1192,7 @@ describe("WebSocket Server", () => {
   });
 
   it("refreshes cached OpenCode MCP servers after runtime inspection", async () => {
-    const stateDir = makeTempDir("cut3-state-get-config-opencode-mcp-refresh-");
+    const stateDir = makeTempDir("draft-state-get-config-opencode-mcp-refresh-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(keybindingsPath, "[]", "utf8");
 
@@ -1286,7 +1286,7 @@ describe("WebSocket Server", () => {
   }, 15_000);
 
   it("bootstraps default keybindings file when missing", async () => {
-    const stateDir = makeTempDir("cut3-state-bootstrap-keybindings-");
+    const stateDir = makeTempDir("draft-state-bootstrap-keybindings-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     expect(fs.existsSync(keybindingsPath)).toBe(false);
 
@@ -1317,7 +1317,7 @@ describe("WebSocket Server", () => {
   });
 
   it("falls back to defaults and reports malformed keybindings config issues", async () => {
-    const stateDir = makeTempDir("cut3-state-malformed-keybindings-");
+    const stateDir = makeTempDir("draft-state-malformed-keybindings-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(keybindingsPath, "{ not-json", "utf8");
 
@@ -1349,7 +1349,7 @@ describe("WebSocket Server", () => {
   });
 
   it("ignores invalid keybinding entries but keeps valid entries and reports issues", async () => {
-    const stateDir = makeTempDir("cut3-state-partial-invalid-keybindings-");
+    const stateDir = makeTempDir("draft-state-partial-invalid-keybindings-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(
       keybindingsPath,
@@ -1400,7 +1400,7 @@ describe("WebSocket Server", () => {
   });
 
   it("pushes server.configUpdated issues when keybindings file changes", async () => {
-    const stateDir = makeTempDir("cut3-state-keybindings-watch-");
+    const stateDir = makeTempDir("draft-state-keybindings-watch-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(keybindingsPath, "[]", "utf8");
 
@@ -1460,7 +1460,7 @@ describe("WebSocket Server", () => {
   });
 
   it("allows shell.openInEditor for the keybindings config path", async () => {
-    const stateDir = makeTempDir("cut3-state-open-keybindings-");
+    const stateDir = makeTempDir("draft-state-open-keybindings-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     const openCalls: Array<{ cwd: string; editor: string }> = [];
     const openService: OpenShape = {
@@ -1492,7 +1492,7 @@ describe("WebSocket Server", () => {
   });
 
   it("reads keybindings from the configured state directory", async () => {
-    const stateDir = makeTempDir("cut3-state-keybindings-");
+    const stateDir = makeTempDir("draft-state-keybindings-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(
       keybindingsPath,
@@ -1528,7 +1528,7 @@ describe("WebSocket Server", () => {
   });
 
   it("upserts keybinding rules and updates cached server config", async () => {
-    const stateDir = makeTempDir("cut3-state-upsert-keybinding-");
+    const stateDir = makeTempDir("draft-state-upsert-keybinding-");
     const keybindingsPath = path.join(stateDir, "keybindings.json");
     fs.writeFileSync(
       keybindingsPath,
@@ -1650,7 +1650,7 @@ describe("WebSocket Server", () => {
     const [ws] = await connectAndAwaitWelcome(port);
     connections.push(ws);
 
-    const workspaceRoot = makeTempDir("cut3-ws-diff-project-");
+    const workspaceRoot = makeTempDir("draft-ws-diff-project-");
     const createdAt = new Date().toISOString();
     const createProjectResponse = await sendRequest(ws, ORCHESTRATION_WS_METHODS.dispatchCommand, {
       type: "project.create",
@@ -1728,7 +1728,7 @@ describe("WebSocket Server", () => {
     const [ws] = await connectAndAwaitWelcome(port);
     connections.push(ws);
 
-    const workspaceRoot = makeTempDir("cut3-ws-project-");
+    const workspaceRoot = makeTempDir("draft-ws-project-");
     const createdAt = new Date().toISOString();
     const createProjectResponse = await sendRequest(ws, ORCHESTRATION_WS_METHODS.dispatchCommand, {
       type: "project.create",
@@ -1850,7 +1850,7 @@ describe("WebSocket Server", () => {
     const [ws] = await connectAndAwaitWelcome(port);
     connections.push(ws);
 
-    const workspaceRoot = makeTempDir("cut3-ws-openrouter-project-");
+    const workspaceRoot = makeTempDir("draft-ws-openrouter-project-");
     const createdAt = new Date().toISOString();
     const createProjectResponse = await sendRequest(ws, ORCHESTRATION_WS_METHODS.dispatchCommand, {
       type: "project.create",
@@ -1968,7 +1968,7 @@ describe("WebSocket Server", () => {
     const [ws] = await connectAndAwaitWelcome(port);
     connections.push(ws);
 
-    const workspaceRoot = makeTempDir("cut3-ws-opencode-project-");
+    const workspaceRoot = makeTempDir("draft-ws-opencode-project-");
     const createdAt = new Date().toISOString();
     const createProjectResponse = await sendRequest(ws, ORCHESTRATION_WS_METHODS.dispatchCommand, {
       type: "project.create",
@@ -2042,7 +2042,7 @@ describe("WebSocket Server", () => {
   });
 
   it("routes terminal RPC methods and broadcasts terminal events", async () => {
-    const cwd = makeTempDir("cut3-ws-terminal-cwd-");
+    const cwd = makeTempDir("draft-ws-terminal-cwd-");
     const terminalManager = new MockTerminalManager();
     server = await createTestServer({
       cwd,
@@ -2115,7 +2115,7 @@ describe("WebSocket Server", () => {
   });
 
   it("routes terminal.exec and publishes terminal exec lifecycle events", async () => {
-    const cwd = makeTempDir("cut3-ws-terminal-exec-cwd-");
+    const cwd = makeTempDir("draft-ws-terminal-exec-cwd-");
     server = await createTestServer({ cwd });
     const addr = server.address();
     const port = typeof addr === "object" && addr !== null ? addr.port : 0;
@@ -2162,7 +2162,7 @@ describe("WebSocket Server", () => {
   });
 
   it("mirrors tracked ! terminal runs into thread activity events", async () => {
-    const cwd = makeTempDir("cut3-ws-terminal-activity-cwd-");
+    const cwd = makeTempDir("draft-ws-terminal-activity-cwd-");
     const terminalManager = new MockTerminalManager();
     server = await createTestServer({
       cwd,
@@ -2391,7 +2391,7 @@ describe("WebSocket Server", () => {
     };
 
     try {
-      const workspace = makeTempDir("cut3-ws-handler-still-usable-");
+      const workspace = makeTempDir("draft-ws-handler-still-usable-");
       fs.writeFileSync(path.join(workspace, "file.txt"), "ok\n", "utf8");
 
       server = await createTestServer({ cwd: workspace, open: brokenOpenService });
@@ -2461,7 +2461,7 @@ describe("WebSocket Server", () => {
   });
 
   it("supports projects.searchEntries", async () => {
-    const workspace = makeTempDir("cut3-ws-workspace-entries-");
+    const workspace = makeTempDir("draft-ws-workspace-entries-");
     fs.mkdirSync(path.join(workspace, "src", "components"), { recursive: true });
     fs.writeFileSync(
       path.join(workspace, "src", "components", "Composer.tsx"),
@@ -2495,8 +2495,8 @@ describe("WebSocket Server", () => {
   });
 
   it("rejects project search requests that escape through symlinked directories", async () => {
-    const workspace = makeTempDir("cut3-ws-symlink-search-");
-    const outside = makeTempDir("cut3-ws-symlink-search-outside-");
+    const workspace = makeTempDir("draft-ws-symlink-search-");
+    const outside = makeTempDir("draft-ws-symlink-search-outside-");
     const linkPath = path.join(workspace, "outside-link");
     createDirectorySymlink(outside, linkPath);
 
@@ -2518,7 +2518,7 @@ describe("WebSocket Server", () => {
   });
 
   it("supports projects.writeFile within the workspace root", async () => {
-    const workspace = makeTempDir("cut3-ws-write-file-");
+    const workspace = makeTempDir("draft-ws-write-file-");
 
     server = await createTestServer({ cwd: workspace });
     const addr = server.address();
@@ -2543,7 +2543,7 @@ describe("WebSocket Server", () => {
   });
 
   it("rejects projects.writeFile paths outside the workspace root", async () => {
-    const workspace = makeTempDir("cut3-ws-write-file-reject-");
+    const workspace = makeTempDir("draft-ws-write-file-reject-");
 
     server = await createTestServer({ cwd: workspace });
     const addr = server.address();
@@ -2566,8 +2566,8 @@ describe("WebSocket Server", () => {
   });
 
   it("rejects projects.writeFile paths that escape through symlinked directories", async () => {
-    const workspace = makeTempDir("cut3-ws-write-file-symlink-");
-    const outside = makeTempDir("cut3-ws-write-file-symlink-outside-");
+    const workspace = makeTempDir("draft-ws-write-file-symlink-");
+    const outside = makeTempDir("draft-ws-write-file-symlink-outside-");
     const linkPath = path.join(workspace, "outside-link");
     createDirectorySymlink(outside, linkPath);
 
@@ -2592,7 +2592,7 @@ describe("WebSocket Server", () => {
   });
 
   it("rejects project file writes outside authorized workspaces", async () => {
-    const workspace = makeTempDir("cut3-ws-write-file-authorized-");
+    const workspace = makeTempDir("draft-ws-write-file-authorized-");
 
     server = await createTestServer({ cwd: workspace });
     const addr = server.address();
@@ -2785,7 +2785,7 @@ describe("WebSocket Server", () => {
   });
 
   it("rejects git pull request routes outside authorized workspaces", async () => {
-    const workspace = makeTempDir("cut3-git-pr-authz-");
+    const workspace = makeTempDir("draft-git-pr-authz-");
     const unauthorizedCwd = path.dirname(workspace);
     const gitManager: GitManagerShape = {
       status: vi.fn(() => Effect.void as any),
@@ -2936,7 +2936,7 @@ describe("WebSocket Server", () => {
     const addr = server.address();
     const port = typeof addr === "object" && addr !== null ? addr.port : 0;
 
-    const authorizedWs = await connectWs(port, "secret-token", "cut3://app");
+    const authorizedWs = await connectWs(port, "secret-token", "draft://app");
     connections.push(authorizedWs);
     const welcome = await waitForPush(authorizedWs, WS_CHANNELS.serverWelcome);
     expect(welcome.channel).toBe(WS_CHANNELS.serverWelcome);

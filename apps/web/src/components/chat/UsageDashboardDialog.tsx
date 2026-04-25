@@ -1,6 +1,6 @@
-import { type ProviderKind } from "@t3tools/contracts";
-import { getModelDisplayName } from "@t3tools/shared/model";
-import { formatGitHubCopilotPlan } from "@t3tools/shared/copilotPlan";
+import { type ProviderKind } from "@draft/contracts";
+import { getModelDisplayName } from "@draft/shared/model";
+import { formatGitHubCopilotPlan } from "@draft/shared/copilotPlan";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3Icon,

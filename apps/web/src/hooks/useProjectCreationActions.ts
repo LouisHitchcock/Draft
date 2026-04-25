@@ -1,4 +1,4 @@
-import { DEFAULT_MODEL_BY_PROVIDER, type ProjectId, type ThreadId } from "@t3tools/contracts";
+import { DEFAULT_MODEL_BY_PROVIDER, type ProjectId, type ThreadId } from "@draft/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 
@@ -97,8 +97,8 @@ export function useProjectCreationActions() {
         } catch (error) {
           const message =
             error instanceof Error && error.message.trim().length > 0
-              ? `Project was added, but CUT3 could not open its first draft thread: ${error.message}`
-              : "Project was added, but CUT3 could not open its first draft thread.";
+              ? `Project was added, but Draft could not open its first draft thread: ${error.message}`
+              : "Project was added, but Draft could not open its first draft thread.";
           setAddProjectError(message);
           return { ok: false, message };
         }

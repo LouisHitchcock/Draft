@@ -1,6 +1,6 @@
 import { memo } from "react";
 
-import type { ProjectSkill, ProjectSkillName } from "@t3tools/contracts";
+import type { ProjectSkill, ProjectSkillName } from "@draft/contracts";
 import { CheckIcon, SparklesIcon } from "lucide-react";
 
 import { Badge } from "../ui/badge";
@@ -44,7 +44,7 @@ export const ComposerSkillPicker = memo(function ComposerSkillPicker(props: {
         <div className="max-h-80 overflow-y-auto px-2 py-2">
           {props.skills.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border/70 bg-muted/15 px-3 py-3 text-sm text-muted-foreground">
-              No skills found in .cut3/skills.
+              No skills found in .draft/skills.
             </div>
           ) : (
             <div className="space-y-1">

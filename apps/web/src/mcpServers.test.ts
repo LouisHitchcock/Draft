@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ServerProviderMcpStatus } from "@t3tools/contracts";
+import type { ServerProviderMcpStatus } from "@draft/contracts";
 
 import {
   buildComposerMcpServerItems,

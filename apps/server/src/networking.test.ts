@@ -84,7 +84,7 @@ describe("networking", () => {
 
     expect(
       isAllowedWebSocketOrigin({
-        originHeader: "cut3://app",
+        originHeader: "draft://app",
         allowedOrigins,
         allowMissingOrigin: true,
         allowNullOrigin: true,

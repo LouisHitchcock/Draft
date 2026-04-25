@@ -2,7 +2,7 @@ import type {
   GitRunStackedActionResult,
   GitStackedAction,
   GitStatusResult,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { type AppLanguage } from "../appLanguage";
 
 export type GitActionIconName = "commit" | "push" | "pr";
@@ -36,7 +36,7 @@ export type DefaultBranchConfirmableAction = "commit_push" | "commit_push_pr";
 
 const SHORT_SHA_LENGTH = 7;
 const TOAST_DESCRIPTION_MAX = 72;
-const PREFERRED_REMOTE_NAME = "CUT3";
+const PREFERRED_REMOTE_NAME = "Draft";
 
 function getGitActionLogicCopy(language: AppLanguage) {
   if (language === "fa") {
@@ -475,4 +475,4 @@ export function resolveDefaultBranchActionDialogCopy(
 }
 
 // Re-export from shared for backwards compatibility in this module's exports
-export { resolveAutoFeatureBranchName } from "@t3tools/shared/git";
+export { resolveAutoFeatureBranchName } from "@draft/shared/git";

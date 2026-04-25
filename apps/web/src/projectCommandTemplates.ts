@@ -3,7 +3,7 @@ import type {
   ProviderInteractionMode,
   ProviderKind,
   RuntimeMode,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 
 export interface ProjectCommandTemplateOverrides {
   readonly provider?: ProviderKind;

@@ -3,7 +3,7 @@ import type {
   ProjectListCommandTemplatesResult,
   ProjectListSkillsResult,
   ProjectSearchEntriesResult,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { queryOptions } from "@tanstack/react-query";
 import { ensureNativeApi } from "~/nativeApi";
 

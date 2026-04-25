@@ -8,5 +8,5 @@ export interface OpenCodeAdapterShape extends ProviderAdapterShape<ProviderAdapt
 }
 
 export class OpenCodeAdapter extends ServiceMap.Service<OpenCodeAdapter, OpenCodeAdapterShape>()(
-  "t4code/provider/Services/OpenCodeAdapter",
+  "draft/provider/Services/OpenCodeAdapter",
 ) {}

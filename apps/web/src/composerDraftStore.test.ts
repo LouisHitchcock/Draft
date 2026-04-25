@@ -1,4 +1,4 @@
-import { ProjectId, ThreadId } from "@t3tools/contracts";
+import { ProjectId, ThreadId } from "@draft/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createJSONStorage } from "zustand/middleware";
 

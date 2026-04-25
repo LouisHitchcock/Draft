@@ -1,9 +1,9 @@
-import { type ModelSlug, type ProviderKind, type ServerCopilotUsage } from "@t3tools/contracts";
+import { type ModelSlug, type ProviderKind, type ServerCopilotUsage } from "@draft/contracts";
 import {
   getModelContextWindowInfo,
   isCodexOpenRouterModel,
   normalizeModelSlug,
-} from "@t3tools/shared/model";
+} from "@draft/shared/model";
 
 import {
   getProviderPickerBackingProvider,

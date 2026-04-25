@@ -2,8 +2,8 @@
 
 ## Purpose
 
-This file defines lightweight guidance for AI agents working in the T4 monorepo.
-T4 is currently internal-only. Optimize for fast iteration, short feedback loops, and practical reliability.
+This file defines lightweight guidance for AI agents working in the Draft monorepo.
+Draft is currently internal-only. Optimize for fast iteration, short feedback loops, and practical reliability.
 
 ## Project Priorities
 
@@ -48,7 +48,7 @@ Prefer extracting reusable shared logic over copy-paste fixes.
 
 ## Provider Runtime Notes
 
-T4 presents one orchestration and websocket surface and routes provider-native behavior through adapters and managers.
+Draft presents one orchestration and websocket surface and routes provider-native behavior through adapters and managers.
 
 - Codex: `apps/server/src/codexAppServerManager.ts`
 - GitHub Copilot: `apps/server/src/copilotAcpManager.ts`
@@ -74,9 +74,9 @@ When adding provider support, prefer native app-server or ACP style integrations
 - Update only docs that are directly affected by the change.
 - If docs are obviously stale in touched areas, fix them in the same change.
 
-## T4 Init Snapshot
+## Draft Init Snapshot
 
-- Workspace root: `T4-Code`
+- Workspace root: `Draft`
 - Package manager: `bun`
 - Common scripts: `fmt`, `lint`, `typecheck`, `test`, `dev:web`, `dev:server`, `dev:desktop`
 

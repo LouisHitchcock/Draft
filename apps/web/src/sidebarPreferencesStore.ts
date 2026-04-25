@@ -1,10 +1,10 @@
-import { ProjectId, ThreadId } from "@t3tools/contracts";
+import { ProjectId, ThreadId } from "@draft/contracts";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { filterArchivedIds, type SidebarProjectSortMode } from "./lib/threadOrdering";
 
-const SIDEBAR_PREFERENCES_STORAGE_KEY = "t4code:sidebar-preferences:v1";
-const LEGACY_SIDEBAR_PREFERENCES_STORAGE_KEY = "cut3:sidebar-preferences:v1";
+const SIDEBAR_PREFERENCES_STORAGE_KEY = "draft:sidebar-preferences:v1";
+const LEGACY_SIDEBAR_PREFERENCES_STORAGE_KEY = "draft:sidebar-preferences:v1";
 
 interface PersistedSidebarPreferencesState {
   pinnedProjectIds: ProjectId[];

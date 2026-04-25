@@ -20,9 +20,9 @@ const isomorphicLocalStorage: Storage =
       })();
 
 const LEGACY_LOCAL_STORAGE_KEYS: Record<string, readonly string[]> = {
-  "t4code:last-editor": ["cut3:last-editor"],
-  "t4code:last-invoked-script-by-project": ["cut3:last-invoked-script-by-project"],
-  "t4code:theme": ["cut3:theme"],
+  "draft:last-editor": ["draft:last-editor"],
+  "draft:last-invoked-script-by-project": ["draft:last-invoked-script-by-project"],
+  "draft:theme": ["draft:theme"],
 };
 
 function getStorageKeyCandidates(key: string): readonly string[] {
@@ -81,7 +81,7 @@ export const removeLocalStorageItem = (key: string) => {
   }
 };
 
-const LOCAL_STORAGE_CHANGE_EVENT = "t4code:local_storage_change";
+const LOCAL_STORAGE_CHANGE_EVENT = "draft:local_storage_change";
 
 interface LocalStorageChangeDetail {
   key: string;

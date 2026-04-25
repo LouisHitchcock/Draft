@@ -1,9 +1,9 @@
-import type { ProviderKind } from "@t3tools/contracts";
+import type { ProviderKind } from "@draft/contracts";
 import {
   getModelContextWindowInfo,
   isCodexOpenRouterModel,
   normalizeModelSlug,
-} from "@t3tools/shared/model";
+} from "@draft/shared/model";
 
 export type ThreadContextUsageSnapshot = {
   provider?: string;

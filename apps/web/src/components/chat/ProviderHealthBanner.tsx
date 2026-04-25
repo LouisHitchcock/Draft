@@ -1,4 +1,4 @@
-import { type ServerProviderStatus } from "@t3tools/contracts";
+import { type ServerProviderStatus } from "@draft/contracts";
 import { memo } from "react";
 import { CircleAlertIcon } from "lucide-react";
 

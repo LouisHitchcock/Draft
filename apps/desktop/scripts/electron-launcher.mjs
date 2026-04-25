@@ -18,7 +18,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { resolveAppReleaseBranding } from "@t3tools/shared/appRelease";
+import { resolveAppReleaseBranding } from "@draft/shared/appRelease";
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
 const LAUNCHER_VERSION = 1;

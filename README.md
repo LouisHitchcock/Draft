@@ -1,12 +1,12 @@
 # Draft
 
 <p align="center">
-  <img src="./T4.png" alt="Draft" width="144" />
+  <img src="./Draft.png" alt="Draft" width="144" />
 </p>
 
 Draft is a coding-agent workspace for teams that want one consistent surface across multiple provider runtimes without flattening them into the lowest common denominator. It currently supports Codex, GitHub Copilot, OpenCode, Kimi Code, and the Pi agent harness.
 
-This project started as a fork of the T3/CUT3 lineage, but the goal here is different. Draft is not trying to be a thin chat wrapper around one preferred agent. It is trying to be the place where provider-native runtimes, repo-owned instructions, approvals, local commands, model controls, and thread history all meet in one predictable workflow.
+This project started as an earlier internal codebase, but the goal here is different. Draft is not trying to be a thin chat wrapper around one preferred agent. It is trying to be the place where provider-native runtimes, repo-owned instructions, approvals, local commands, model controls, and thread history all meet in one predictable workflow.
 
 ## Design objectives
 
@@ -16,9 +16,9 @@ This project started as a fork of the T3/CUT3 lineage, but the goal here is diff
 - Optimize for active development loops: pick a project, start a thread, run commands, steer a turn, fork from a checkpoint, and keep moving.
 - Support both web and desktop without splitting the product into two different mental models.
 
-## How Draft differs from T3
+## How Draft differs from earlier iterations
 
-- T3 was more opinionated around a narrower agent workflow and older branding. Draft is explicitly multi-provider and built around orchestration across provider-native adapters.
+- Earlier iterations were more opinionated around a narrower agent workflow and older branding. Draft is explicitly multi-provider and built around orchestration across provider-native adapters.
 - Draft puts more weight on repo-owned behavior. Workspace instructions, command templates, and attachable skills are part of the core UX rather than an afterthought.
 - Draft exposes more execution controls in the main flow: runtime mode, interaction mode, approvals, queued follow-ups, local `!` commands, thread exports, undo/redo, and branch-style forking from checkpoints.
 - Draft is designed to make agent sessions easier to inspect and recover. The UI keeps more of the operational state visible instead of hiding it behind a simple transcript.
@@ -33,7 +33,7 @@ This project started as a fork of the T3/CUT3 lineage, but the goal here is diff
 
 ## Screenshot
 
-![Draft screenshot](./T4.png)
+![Draft screenshot](./Draft.png)
 
 ## Supported providers
 
@@ -60,7 +60,7 @@ Gemini is intentionally shown as coming soon in the provider picker. Claude Code
 bun run start
 ```
 
-If you bind Draft to a non-loopback host, set `T4CODE_AUTH_TOKEN`. Legacy `CUT3_AUTH_TOKEN` is still accepted in the runtime, but `T4CODE_AUTH_TOKEN` is the current env var.
+If you bind Draft to a non-loopback host, set `DRAFT_AUTH_TOKEN`. `DRAFT_AUTH_TOKEN` is the current env var.
 
 Once the app is running, choose Codex, GitHub Copilot, OpenCode, Kimi Code, or Pi from the provider picker before starting a session. If this is your first run and Draft does not know any projects yet, the empty chat view walks you through adding a project folder and immediately opens the first draft thread for it.
 
@@ -69,17 +69,17 @@ Once the app is running, choose Codex, GitHub Copilot, OpenCode, Kimi Code, or P
 Draft recognizes three repo-owned workspace surfaces:
 
 - `AGENTS.md` at the workspace root. When it exists, Draft wraps every new provider turn with those workspace instructions on the server side.
-- `.t4code/commands/*.md` for repo-local slash-command templates.
-- `.t4code/skills/<name>/SKILL.md` for repo-local skills that can be attached per turn from the composer.
+- `.draft/commands/*.md` for repo-local slash-command templates.
+- `.draft/skills/<name>/SKILL.md` for repo-local skills that can be attached per turn from the composer.
 
-Legacy `.cut3/commands` and `.cut3/skills` directories are still recognized for compatibility.
+Legacy `.draft/commands` and `.draft/skills` directories are still recognized for compatibility.
 
 From the composer:
 
 - Run built-in slash commands such as `/new` (`/clear`), `/compact` (`/summarize`), `/share`, `/unshare`, `/undo`, `/redo`, `/export`, `/details`, `/init`, `/plan`, `/default`, `/model`, and `/mcp` (when the active provider supports MCP).
 - Run standalone local terminal commands with `!`, for example `!bun run lint`. Draft launches these in a hidden thread-scoped terminal using the current thread workspace cwd/env, then appends durable started/completed command rows to the conversation.
-- Type `/` to see those built-in commands plus any templates discovered from `.t4code/commands/*.md`.
-- Open the Skills picker to attach repo-local skills discovered from `.t4code/skills/<name>/SKILL.md`. Skill files must include `name` and `description` frontmatter, and `name` must match the lowercase hyphenated directory name.
+- Type `/` to see those built-in commands plus any templates discovered from `.draft/commands/*.md`.
+- Open the Skills picker to attach repo-local skills discovered from `.draft/skills/<name>/SKILL.md`. Skill files must include `name` and `description` frontmatter, and `name` must match the lowercase hyphenated directory name.
 - Attach up to **8 images per message** with the paperclip button, drag-and-drop, or paste. Draft accepts image files only, enforces a **10 MB per image** limit, shows inline previews in the composer and thread timeline, and includes attachment names in bootstrap/export summaries.
 - When a turn is already running, use the composer follow-up controls to **Queue** the next message or **Steer** the run so Draft interrupts the current turn and sends your new follow-up next. Press `Enter` to use the current Queue/Steer mode, or `Cmd/Ctrl+Enter` to use the opposite mode for that one follow-up.
 - Watch the activity strip above the timeline for live status. It keeps idle vs working state visible and shows compact command/file context for the latest active tool, approval, or local `!` command.

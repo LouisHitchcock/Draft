@@ -1,4 +1,4 @@
-import type { ProviderKind, ThreadForkSource } from "@t3tools/contracts";
+import type { ProviderKind, ThreadForkSource } from "@draft/contracts";
 
 import type { Thread, TurnDiffSummary } from "./types";
 

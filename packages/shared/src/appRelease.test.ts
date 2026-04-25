@@ -43,9 +43,9 @@ describe("resolveAppReleaseBranding", () => {
       stageLabel: "Draft",
       displayName: "Draft",
       productName: "Draft",
-      appId: "com.t3tools.t4code",
-      stateDirName: "t4code",
-      userDataDirName: "t4code",
+      appId: "com.draft.desktop",
+      stateDirName: "desktop",
+      userDataDirName: "draft",
     });
   });
 
@@ -54,9 +54,9 @@ describe("resolveAppReleaseBranding", () => {
       stageLabel: "Draft",
       displayName: "Draft",
       productName: "Draft",
-      appId: "com.t3tools.t4code",
-      stateDirName: "t4code",
-      userDataDirName: "t4code",
+      appId: "com.draft.desktop",
+      stateDirName: "desktop",
+      userDataDirName: "draft",
     });
   });
 
@@ -65,9 +65,9 @@ describe("resolveAppReleaseBranding", () => {
       stageLabel: "Draft",
       displayName: "Draft",
       productName: "Draft",
-      appId: "com.t3tools.t4code",
-      stateDirName: "t4code",
-      userDataDirName: "t4code",
+      appId: "com.draft.desktop",
+      stateDirName: "desktop",
+      userDataDirName: "draft",
     });
   });
 
@@ -76,9 +76,9 @@ describe("resolveAppReleaseBranding", () => {
       stageLabel: "Draft",
       displayName: "Draft",
       productName: "Draft",
-      appId: "com.t3tools.t4code",
-      stateDirName: "t4code",
-      userDataDirName: "t4code",
+      appId: "com.draft.desktop",
+      stateDirName: "desktop",
+      userDataDirName: "draft",
     });
   });
 });

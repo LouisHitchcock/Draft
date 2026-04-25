@@ -4,8 +4,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
-import type { ServerCopilotUsage } from "@t3tools/contracts";
-import { formatGitHubCopilotPlan } from "@t3tools/shared/copilotPlan";
+import type { ServerCopilotUsage } from "@draft/contracts";
+import { formatGitHubCopilotPlan } from "@draft/shared/copilotPlan";
 
 const COPILOT_CONFIG_PATH = join(homedir(), ".copilot", "config.json");
 const COPILOT_USAGE_API_VERSION = "2025-04-01";
@@ -217,7 +217,7 @@ async function fetchCopilotInternalUser(params: {
     headers: {
       Accept: "application/json",
       Authorization: `token ${params.token}`,
-      "User-Agent": "cut3",
+      "User-Agent": "draft",
       "X-GitHub-Api-Version": COPILOT_USAGE_API_VERSION,
     },
     signal,

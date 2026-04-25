@@ -4,7 +4,7 @@ import type {
   ServerCopilotUsage,
   ServerOpenCodeState,
   ServerOpenCodeStateInput,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { queryOptions } from "@tanstack/react-query";
 import { ensureNativeApi } from "~/nativeApi";
 

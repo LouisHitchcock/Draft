@@ -1,4 +1,4 @@
-import type { ProviderKind, ProviderRuntimeEvent } from "@t3tools/contracts";
+import type { ProviderKind, ProviderRuntimeEvent } from "@draft/contracts";
 import { Effect, Queue, Stream } from "effect";
 
 import {

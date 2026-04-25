@@ -3,15 +3,15 @@ import {
   type ProviderKind,
   type ProviderReasoningLevel,
   type ThreadId,
-} from "@t3tools/contracts";
+} from "@draft/contracts";
 import { type ChatMessage, type Thread } from "../types";
 import { randomUUID } from "~/lib/utils";
 import { getAppModelOptions } from "../appSettings";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
 import { Schema } from "effect";
 
-export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "t4code:last-invoked-script-by-project";
-const WORKTREE_BRANCH_PREFIX = "t4code";
+export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "draft:last-invoked-script-by-project";
+const WORKTREE_BRANCH_PREFIX = "draft";
 
 export const LastInvokedScriptByProjectSchema = Schema.Record(ProjectId, Schema.String);
 
