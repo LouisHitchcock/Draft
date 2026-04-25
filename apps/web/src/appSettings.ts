@@ -1,13 +1,13 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { Option, Schema } from "effect";
-import { type ProviderKind, type ProviderServiceTier } from "@t3tools/contracts";
+import { type ProviderKind, type ProviderServiceTier } from "@draft/contracts";
 import {
   getDefaultModel,
   getModelDisplayName,
   getModelOptions,
   isCodexOpenRouterModel,
   normalizeModelSlug,
-} from "@t3tools/shared/model";
+} from "@draft/shared/model";
 
 import {
   clampUiFontSizePx,
@@ -23,8 +23,8 @@ import { CUSTOM_THEME_IDS } from "./lib/customThemes";
 import { normalizeModelPreferenceSlugs } from "./lib/modelPreferences";
 import { isOpenRouterGuaranteedFreeSlug } from "./lib/openRouterModels";
 
-const APP_SETTINGS_STORAGE_KEY = "t4code:app-settings:v1";
-const LEGACY_APP_SETTINGS_STORAGE_KEYS = ["cut3:app-settings:v1"] as const;
+const APP_SETTINGS_STORAGE_KEY = "draft:app-settings:v1";
+const LEGACY_APP_SETTINGS_STORAGE_KEYS = ["draft:app-settings:v1"] as const;
 const MAX_CUSTOM_MODEL_COUNT = 32;
 const MAX_FAVORITE_MODEL_COUNT = 32;
 const MAX_RECENT_MODEL_COUNT = 12;
@@ -283,6 +283,10 @@ let hasHydratedDesktopSecrets = false;
 let secretHydrationPromise: Promise<void> | null = null;
 let secretHydrationVersion = 0;
 
+function isLegacyAppSettingsStorageKey(key: string): boolean {
+  return key !== APP_SETTINGS_STORAGE_KEY;
+}
+
 export function supportsCustomModels(provider: ProviderKind): boolean {
   return PROVIDERS_WITH_CUSTOM_MODEL_SUPPORT.has(provider);
 }
@@ -309,7 +313,7 @@ export function normalizeCustomModelSlugs(
       continue;
     }
 
-    // CUT3 only persists explicit OpenRouter free slugs so model picks cannot
+    // Draft only persists explicit OpenRouter free slugs so model picks cannot
     // silently drift onto a billed OpenRouter model later.
     if (
       provider === "codex" &&
@@ -543,6 +547,9 @@ function readAppSettingsStorageRaw(storage: Storage): string | null {
     return current;
   }
   for (const legacyKey of LEGACY_APP_SETTINGS_STORAGE_KEYS) {
+    if (!isLegacyAppSettingsStorageKey(legacyKey)) {
+      continue;
+    }
     const legacyValue = storage.getItem(legacyKey);
     if (legacyValue === null) {
       continue;
@@ -688,6 +695,9 @@ function persistSettings(next: AppSettings): void {
     if (raw !== cachedRawSettings) {
       window.localStorage.setItem(APP_SETTINGS_STORAGE_KEY, raw);
       for (const legacyKey of LEGACY_APP_SETTINGS_STORAGE_KEYS) {
+        if (!isLegacyAppSettingsStorageKey(legacyKey)) {
+          continue;
+        }
         window.localStorage.removeItem(legacyKey);
       }
     }

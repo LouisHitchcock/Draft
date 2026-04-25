@@ -20,8 +20,8 @@ type ThemeSnapshot = {
   customThemeId: CustomThemeId;
 };
 
-const STORAGE_KEY = "t4code:theme";
-const LEGACY_STORAGE_KEYS = ["cut3:theme"] as const;
+const STORAGE_KEY = "draft:theme";
+const LEGACY_STORAGE_KEYS = ["draft:theme"] as const;
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 
 let listeners: Array<() => void> = [];
@@ -29,6 +29,10 @@ let lastSnapshot: ThemeSnapshot | null = null;
 let lastDesktopTheme: Theme | null = null;
 function emitChange() {
   for (const listener of listeners) listener();
+}
+
+function isLegacyThemeStorageKey(key: string): boolean {
+  return key !== STORAGE_KEY;
 }
 
 function hasDom(): boolean {
@@ -185,7 +189,12 @@ function subscribe(listener: () => void): () => void {
 
   // Listen for storage changes from other tabs
   const handleStorage = (e: StorageEvent) => {
-    if (e.key === STORAGE_KEY || LEGACY_STORAGE_KEYS.includes(e.key as never)) {
+    if (
+      e.key === STORAGE_KEY ||
+      (typeof e.key === "string" &&
+        LEGACY_STORAGE_KEYS.includes(e.key as never) &&
+        isLegacyThemeStorageKey(e.key))
+    ) {
       applyTheme(getStored(), getStoredCustomThemeId(), true);
       emitChange();
     }
@@ -225,6 +234,9 @@ export function useTheme() {
 
     window.localStorage.setItem(STORAGE_KEY, next);
     for (const legacyKey of LEGACY_STORAGE_KEYS) {
+      if (!isLegacyThemeStorageKey(legacyKey)) {
+        continue;
+      }
       window.localStorage.removeItem(legacyKey);
     }
     applyTheme(next, getStoredCustomThemeId(), true);
