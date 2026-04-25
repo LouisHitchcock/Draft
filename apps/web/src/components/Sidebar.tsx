@@ -38,7 +38,7 @@ import {
   type ResolvedKeybindingsConfig,
 } from "@draft/contracts";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
+import { useLocation, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useAppSettings } from "../appSettings";
 import { getAppLanguageDetails, type AppLanguage } from "../appLanguage";
 import { isElectron } from "../env";
@@ -413,7 +413,7 @@ function localizeThreadStatusLabel(label: string, language: AppLanguage): string
 }
 
 function BrandMark() {
-  return <img src="/t4.png" alt="" className="size-5 shrink-0 rounded-md" />;
+  return <img src="/draftlogo.png" alt="" className="size-5 shrink-0 rounded-md" />;
 }
 
 function ProjectFavicon({ cwd }: { cwd: string }) {
@@ -501,10 +501,16 @@ export default function Sidebar(props: SidebarProps = {}) {
   const isOnSettings = useLocation({ select: (loc) => loc.pathname === "/settings" });
   const { settings: appSettings } = useAppSettings();
   const sidebarCopy = useMemo(() => getSidebarCopy(appSettings.language), [appSettings.language]);
-  const routeThreadId = useParams({
+  const routeThreadIdFromParams = useParams({
     strict: false,
     select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
   });
+  const routeThreadIdFromSearch = useSearch({
+    strict: false,
+    select: (search) =>
+      typeof search.threadId === "string" ? ThreadId.makeUnsafe(search.threadId) : null,
+  });
+  const routeThreadId = routeThreadIdFromParams ?? routeThreadIdFromSearch;
   const { data: keybindings = EMPTY_KEYBINDINGS } = useQuery({
     ...serverConfigQueryOptions(),
     select: (config) => config.keybindings,
@@ -595,8 +601,8 @@ export default function Sidebar(props: SidebarProps = {}) {
         return;
       }
       void navigate({
-        to: "/$threadId",
-        params: { threadId },
+        to: "/draft",
+        search: { threadId },
       });
     },
     [isMobile, navigate, onSelectThread, setOpenMobile],
@@ -881,12 +887,12 @@ export default function Sidebar(props: SidebarProps = {}) {
       if (shouldNavigateToFallback) {
         if (fallbackThreadId) {
           void navigate({
-            to: "/$threadId",
-            params: { threadId: fallbackThreadId },
+            to: "/draft",
+            search: { threadId: fallbackThreadId },
             replace: true,
           });
         } else {
-          void navigate({ to: "/", replace: true });
+          void navigate({ to: "/draft", search: { threadId: undefined }, replace: true });
         }
       }
 

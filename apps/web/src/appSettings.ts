@@ -105,6 +105,9 @@ const AppSettingsSchema = Schema.Struct({
   codexHomePath: Schema.String.check(Schema.isMaxLength(4096)).pipe(
     Schema.withConstructorDefault(() => Option.some("")),
   ),
+  openAiApiKey: Schema.String.check(Schema.isMaxLength(4096)).pipe(
+    Schema.withConstructorDefault(() => Option.some("")),
+  ),
   openRouterApiKey: Schema.String.check(Schema.isMaxLength(4096)).pipe(
     Schema.withConstructorDefault(() => Option.some("")),
   ),
@@ -264,8 +267,9 @@ export function shouldShowFastTierIcon(
 }
 
 const DEFAULT_APP_SETTINGS = AppSettingsSchema.makeUnsafe({});
-type SecretAppSettings = Pick<AppSettings, "openRouterApiKey" | "kimiApiKey">;
+type SecretAppSettings = Pick<AppSettings, "openAiApiKey" | "openRouterApiKey" | "kimiApiKey">;
 const DEFAULT_SECRET_SETTINGS = {
+  openAiApiKey: DEFAULT_APP_SETTINGS.openAiApiKey,
   openRouterApiKey: DEFAULT_APP_SETTINGS.openRouterApiKey,
   kimiApiKey: DEFAULT_APP_SETTINGS.kimiApiKey,
 } satisfies SecretAppSettings;
@@ -590,6 +594,9 @@ function persistDesktopSecrets(next: SecretAppSettings): void {
   }
 
   void window.desktopBridge
+    .setSecret("openAiApiKey", normalizeDesktopSecretValue(next.openAiApiKey))
+    .catch(() => undefined);
+  void window.desktopBridge
     .setSecret("openRouterApiKey", normalizeDesktopSecretValue(next.openRouterApiKey))
     .catch(() => undefined);
   void window.desktopBridge
@@ -607,21 +614,25 @@ function hydrateDesktopSecretsOnce(): void {
 
   const hydrationVersion = secretHydrationVersion;
   secretHydrationPromise = Promise.all([
+    window.desktopBridge.getSecret("openAiApiKey"),
     window.desktopBridge.getSecret("openRouterApiKey"),
     window.desktopBridge.getSecret("kimiApiKey"),
   ])
-    .then(([openRouterSecret, kimiSecret]) => {
+    .then(([openAiSecret, openRouterSecret, kimiSecret]) => {
       hasHydratedDesktopSecrets = true;
       if (secretHydrationVersion !== hydrationVersion) {
         return;
       }
 
       const nextSecrets: SecretAppSettings = {
+        openAiApiKey:
+          normalizeDesktopSecretValue(openAiSecret) ?? DEFAULT_SECRET_SETTINGS.openAiApiKey,
         openRouterApiKey:
           normalizeDesktopSecretValue(openRouterSecret) ?? DEFAULT_SECRET_SETTINGS.openRouterApiKey,
         kimiApiKey: normalizeDesktopSecretValue(kimiSecret) ?? DEFAULT_SECRET_SETTINGS.kimiApiKey,
       };
       if (
+        cachedSecretSettings.openAiApiKey === nextSecrets.openAiApiKey &&
         cachedSecretSettings.openRouterApiKey === nextSecrets.openRouterApiKey &&
         cachedSecretSettings.kimiApiKey === nextSecrets.kimiApiKey
       ) {
@@ -649,6 +660,7 @@ export function getAppSettingsSnapshot(): AppSettings {
   const raw = readAppSettingsStorageRaw(window.localStorage);
   if (raw !== cachedRawSettings) {
     const parsedSettings = parsePersistedSettings(raw);
+    const migratedOpenAiSecret = normalizeDesktopSecretValue(parsedSettings.openAiApiKey);
     const migratedOpenRouterSecret = normalizeDesktopSecretValue(parsedSettings.openRouterApiKey);
     const migratedKimiSecret = normalizeDesktopSecretValue(parsedSettings.kimiApiKey);
 
@@ -656,11 +668,13 @@ export function getAppSettingsSnapshot(): AppSettings {
     cachedPersistedSnapshot = sanitizePersistedAppSettingsForStorage(parsedSettings);
 
     if (
+      (migratedOpenAiSecret !== null && cachedSecretSettings.openAiApiKey !== migratedOpenAiSecret) ||
       (migratedOpenRouterSecret !== null &&
         cachedSecretSettings.openRouterApiKey !== migratedOpenRouterSecret) ||
       (migratedKimiSecret !== null && cachedSecretSettings.kimiApiKey !== migratedKimiSecret)
     ) {
       persistDesktopSecrets({
+        openAiApiKey: migratedOpenAiSecret ?? cachedSecretSettings.openAiApiKey,
         openRouterApiKey: migratedOpenRouterSecret ?? cachedSecretSettings.openRouterApiKey,
         kimiApiKey: migratedKimiSecret ?? cachedSecretSettings.kimiApiKey,
       });
@@ -676,7 +690,7 @@ export function getAppSettingsSnapshot(): AppSettings {
     }
   }
 
-  const snapshotKey = `${cachedRawSettings ?? ""}\u0000${cachedSecretSettings.openRouterApiKey}\u0000${cachedSecretSettings.kimiApiKey}`;
+  const snapshotKey = `${cachedRawSettings ?? ""}\u0000${cachedSecretSettings.openAiApiKey}\u0000${cachedSecretSettings.openRouterApiKey}\u0000${cachedSecretSettings.kimiApiKey}`;
   if (cachedSnapshotKey === snapshotKey) {
     return cachedSnapshot;
   }
@@ -708,6 +722,7 @@ function persistSettings(next: AppSettings): void {
   cachedRawSettings = raw;
   cachedPersistedSnapshot = persistedSettings;
   persistDesktopSecrets({
+    openAiApiKey: next.openAiApiKey,
     openRouterApiKey: next.openRouterApiKey,
     kimiApiKey: next.kimiApiKey,
   });

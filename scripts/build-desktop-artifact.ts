@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import rootPackageJson from "../package.json" with { type: "json" };
@@ -151,6 +151,48 @@ function resolvePythonForNodeGyp(): string | undefined {
   }
 
   return executable;
+}
+
+function resolveCachedWindowsRceditPath(): string | undefined {
+  if (process.platform !== "win32") {
+    return undefined;
+  }
+
+  const localAppData = process.env.LOCALAPPDATA;
+  if (!localAppData) {
+    return undefined;
+  }
+
+  const cacheRoot = join(localAppData, "electron-builder", "Cache", "winCodeSign");
+  if (!existsSync(cacheRoot)) {
+    return undefined;
+  }
+
+  const candidates = readdirSync(cacheRoot)
+    .map((entry) => join(cacheRoot, entry))
+    .filter((fullPath) => {
+      try {
+        return statSync(fullPath).isDirectory();
+      } catch {
+        return false;
+      }
+    })
+    .sort((a, b) => {
+      try {
+        return statSync(b).mtimeMs - statSync(a).mtimeMs;
+      } catch {
+        return 0;
+      }
+    });
+
+  for (const directory of candidates) {
+    const x64Path = join(directory, "rcedit-x64.exe");
+    if (existsSync(x64Path)) {
+      return x64Path;
+    }
+  }
+
+  return undefined;
 }
 
 interface ResolvedBuildOptions {
@@ -501,6 +543,8 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       icon: "icon.ico",
     };
     if (!signed) {
+      // Unsigned Windows builds apply executable icon resources in a
+      // separate post-packaging step using cached local tooling.
       winConfig.signAndEditExecutable = false;
       winConfig.verifyUpdateCodeSignature = false;
     }
@@ -709,18 +753,101 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     buildEnv.GYP_MSVS_VERSION = buildEnv.GYP_MSVS_VERSION ?? "2022";
   }
 
-  yield* Effect.log(
-    `[desktop-artifact] Building ${options.platform}/${options.target} (arch=${options.arch}, version=${appVersion})...`,
-  );
-  yield* runCommand(
-    ChildProcess.make({
-      cwd: stageAppDir,
-      env: buildEnv,
-      ...commandOutputOptions(options.verbose),
-      // Windows needs shell mode to resolve .cmd shims.
-      shell: process.platform === "win32",
-    })`bunx electron-builder ${platformConfig.cliFlag} --${options.arch} --publish never`,
-  );
+  const useUnsignedWindowsPrepackagedFlow = options.platform === "win" && !options.signed;
+  if (useUnsignedWindowsPrepackagedFlow) {
+    yield* Effect.log(
+      `[desktop-artifact] Building ${options.platform}/dir (arch=${options.arch}, version=${appVersion})...`,
+    );
+    yield* runCommand(
+      ChildProcess.make({
+        cwd: stageAppDir,
+        env: buildEnv,
+        ...commandOutputOptions(options.verbose),
+        // Windows needs shell mode to resolve .cmd shims.
+        shell: process.platform === "win32",
+      })`bunx electron-builder ${platformConfig.cliFlag} --${options.arch} --dir --publish never`,
+    );
+
+    const stageDistDir = path.join(stageAppDir, "dist");
+    const winUnpackedDir = path.join(stageDistDir, "win-unpacked");
+    if (!(yield* fs.exists(winUnpackedDir))) {
+      return yield* new BuildScriptError({
+        message: `Missing prepackaged app output at ${winUnpackedDir}`,
+      });
+    }
+
+    const expectedExePath = path.join(winUnpackedDir, `${appReleaseBranding.productName}.exe`);
+    const appExePath = yield* fs.exists(expectedExePath).pipe(
+      Effect.flatMap((exists) => {
+        if (exists) {
+          return Effect.succeed(expectedExePath);
+        }
+        return Effect.flatMap(fs.readDirectory(winUnpackedDir), (entries) => {
+          const fallbackExe = entries.find(
+            (entry) =>
+              entry.toLowerCase().endsWith(".exe") &&
+              !entry.toLowerCase().startsWith("uninstall"),
+          );
+          if (!fallbackExe) {
+            return Effect.fail(
+              new BuildScriptError({
+                message: `Could not find application executable in ${winUnpackedDir}`,
+              }),
+            );
+          }
+          return Effect.succeed(path.join(winUnpackedDir, fallbackExe));
+        });
+      }),
+    );
+
+    const rceditPath = resolveCachedWindowsRceditPath();
+    if (!rceditPath) {
+      return yield* new BuildScriptError({
+        message:
+          "Could not find cached rcedit-x64.exe under %LOCALAPPDATA%\\electron-builder\\Cache\\winCodeSign.",
+      });
+    }
+
+    const iconPath = path.join(stageResourcesDir, "icon.ico");
+    if (!(yield* fs.exists(iconPath))) {
+      return yield* new BuildScriptError({
+        message: `Missing staged Windows icon at ${iconPath}`,
+      });
+    }
+
+    yield* Effect.log("[desktop-artifact] Applying icon resources with cached rcedit...");
+    yield* runCommand(
+      ChildProcess.make({
+        ...commandOutputOptions(options.verbose),
+      })`${rceditPath} ${appExePath} --set-icon ${iconPath}`,
+    );
+
+    yield* Effect.log(
+      `[desktop-artifact] Packaging ${options.platform}/${options.target} from prepackaged app...`,
+    );
+    yield* runCommand(
+      ChildProcess.make({
+        cwd: stageAppDir,
+        env: buildEnv,
+        ...commandOutputOptions(options.verbose),
+        // Windows needs shell mode to resolve .cmd shims.
+        shell: process.platform === "win32",
+      })`bunx electron-builder ${platformConfig.cliFlag} --${options.arch} --prepackaged ${winUnpackedDir} --publish never`,
+    );
+  } else {
+    yield* Effect.log(
+      `[desktop-artifact] Building ${options.platform}/${options.target} (arch=${options.arch}, version=${appVersion})...`,
+    );
+    yield* runCommand(
+      ChildProcess.make({
+        cwd: stageAppDir,
+        env: buildEnv,
+        ...commandOutputOptions(options.verbose),
+        // Windows needs shell mode to resolve .cmd shims.
+        shell: process.platform === "win32",
+      })`bunx electron-builder ${platformConfig.cliFlag} --${options.arch} --publish never`,
+    );
+  }
 
   const stageDistDir = path.join(stageAppDir, "dist");
   if (!(yield* fs.exists(stageDistDir))) {

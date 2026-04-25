@@ -24,6 +24,7 @@ describe("ProviderSessionStartInput", () => {
         codex: {
           binaryPath: "/usr/local/bin/codex",
           homePath: "/tmp/.codex",
+          openAiApiKey: "sk-openai-test",
           openRouterApiKey: "sk-or-test",
         },
       },
@@ -33,6 +34,7 @@ describe("ProviderSessionStartInput", () => {
     expect(parsed.modelOptions?.codex?.fastMode).toBe(true);
     expect(parsed.providerOptions?.codex?.binaryPath).toBe("/usr/local/bin/codex");
     expect(parsed.providerOptions?.codex?.homePath).toBe("/tmp/.codex");
+    expect(parsed.providerOptions?.codex?.openAiApiKey).toBe("sk-openai-test");
     expect(parsed.providerOptions?.codex?.openRouterApiKey).toBe("sk-or-test");
   });
 

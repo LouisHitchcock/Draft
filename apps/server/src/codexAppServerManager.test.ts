@@ -761,6 +761,31 @@ describe("buildCodexAppServerEnv", () => {
       CODEX_HOME: "/tmp/codex-home",
     });
   });
+  it("injects OPENAI_API_KEY for native Codex sessions when explicitly provided", () => {
+    expect(
+      buildCodexAppServerEnv({
+        baseEnv: { PATH: "/usr/bin", OPENAI_API_KEY: "ambient-secret" },
+        model: "gpt-5.3-codex",
+        openAiApiKey: "**************",
+      }),
+    ).toEqual({
+      PATH: "/usr/bin",
+      OPENAI_API_KEY: "**************",
+    });
+  });
+
+  it("removes OPENAI_API_KEY from OpenRouter-routed sessions", () => {
+    expect(
+      buildCodexAppServerEnv({
+        baseEnv: { PATH: "/usr/bin", OPENAI_API_KEY: "ambient-secret" },
+        model: "openrouter/free",
+        openRouterApiKey: "sk-or-secret",
+      }),
+    ).toEqual({
+      PATH: "/usr/bin",
+      OPENROUTER_API_KEY: "sk-or-secret",
+    });
+  });
 
   it("injects OPENROUTER_API_KEY only for OpenRouter-routed Codex sessions", () => {
     expect(

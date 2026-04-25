@@ -30,8 +30,8 @@ export function useProjectCreationActions() {
   const openThread = useCallback(
     async (threadId: ThreadId) => {
       await navigate({
-        to: "/$threadId",
-        params: { threadId },
+        to: "/draft",
+        search: { threadId },
       });
     },
     [navigate],

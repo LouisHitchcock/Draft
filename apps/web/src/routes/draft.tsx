@@ -10,9 +10,11 @@ import {
   type ResolvedKeybindingsConfig,
   ThreadId,
 } from "@draft/contracts";
-import { resolveModelSlugForProvider } from "@draft/shared/model";
+import { parsePatchFiles } from "@pierre/diffs";
+import { FileDiff, type FileDiffMetadata } from "@pierre/diffs/react";
+import { isCodexOpenRouterModel, resolveModelSlugForProvider } from "@draft/shared/model";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   BotIcon,
@@ -21,6 +23,7 @@ import {
   EllipsisIcon,
   GlobeIcon,
   HammerIcon,
+  ListTodoIcon,
   PlusIcon,
   RefreshCwIcon,
   SendHorizonal,
@@ -30,6 +33,7 @@ import {
   TriangleAlertIcon,
   UserIcon,
   WrenchIcon,
+  XIcon,
 } from "lucide-react";
 import {
   useCallback,
@@ -42,27 +46,35 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
+import { useAppSettings } from "../appSettings";
 import { AUTO_SCROLL_BOTTOM_THRESHOLD_PX, isScrollContainerNearBottom } from "../chat-scroll";
 import ChatMarkdown from "../components/ChatMarkdown";
 import GitActionsControl from "../components/GitActionsControl";
 import ThreadNewButton from "../components/ThreadNewButton";
 import ThreadSidebar from "../components/Sidebar";
 import ThreadSidebarToggle from "../components/ThreadSidebarToggle";
+import { useComposerDraftStore } from "../composerDraftStore";
 import { OpenInPicker } from "../components/chat/OpenInPicker";
 import { ComposerPendingApprovalActions } from "../components/chat/ComposerPendingApprovalActions";
 import { Button } from "../components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/ui/collapsible";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../components/ui/menu";
 import { Sidebar, SidebarInset, SidebarProvider } from "../components/ui/sidebar";
+import { useTheme } from "../hooks/useTheme";
 import {
   describeContextWindowState,
   getDocumentedContextWindowOverride,
 } from "../lib/contextWindow";
+import { buildPatchCacheKey, resolveDiffThemeName } from "../lib/diffRendering";
 import { gitStatusQueryOptions } from "../lib/gitReactQuery";
+import { isTerminalFocused } from "../lib/terminalFocus";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { newCommandId, newMessageId, newThreadId, randomUUID } from "../lib/utils";
+import { resolveShortcutCommand } from "../keybindings";
 import { readNativeApi } from "../nativeApi";
 import {
+  deriveActivePlanState,
+  findLatestProposedPlan,
   derivePendingApprovals,
   derivePendingUserInputs,
   deriveTimelineEntries,
@@ -71,6 +83,7 @@ import {
   type PendingUserInput,
   type WorkLogEntry,
 } from "../session-logic";
+import PlanSidebar from "../components/PlanSidebar";
 import {
   commandLifecycleDisplayLabel,
   deriveActionStepStatus,
@@ -97,6 +110,9 @@ const DRAFT_PROVIDER_PRIORITY: readonly ProviderKind[] = [
   "kimi",
   "pi",
 ];
+function resolveTemporaryForcedProvider(): ProviderKind | null {
+  return null;
+}
 
 interface RuntimeNotice {
   id: string;
@@ -151,6 +167,72 @@ function resolveDraftModelOptions(input: {
     options.add(DEFAULT_MODEL_BY_PROVIDER[input.provider]);
   }
   return [...options];
+}
+function buildProviderOptionsForDispatch(input: {
+  readonly provider: ProviderKind;
+  readonly settings: {
+    readonly codexBinaryPath: string;
+    readonly codexHomePath: string;
+    readonly openAiApiKey: string;
+    readonly openRouterApiKey: string;
+    readonly copilotBinaryPath: string;
+    readonly opencodeBinaryPath: string;
+    readonly kimiBinaryPath: string;
+    readonly kimiApiKey: string;
+  };
+}) {
+  const codexBinaryPath = input.settings.codexBinaryPath.trim();
+  const codexHomePath = input.settings.codexHomePath.trim();
+  const openAiApiKey = input.settings.openAiApiKey.trim();
+  const openRouterApiKey = input.settings.openRouterApiKey.trim();
+  const copilotBinaryPath = input.settings.copilotBinaryPath.trim();
+  const opencodeBinaryPath = input.settings.opencodeBinaryPath.trim();
+  const kimiBinaryPath = input.settings.kimiBinaryPath.trim();
+  const kimiApiKey = input.settings.kimiApiKey.trim();
+
+  switch (input.provider) {
+    case "codex":
+      return codexBinaryPath || codexHomePath || openAiApiKey || openRouterApiKey
+        ? {
+            codex: {
+              ...(codexBinaryPath ? { binaryPath: codexBinaryPath } : {}),
+              ...(codexHomePath ? { homePath: codexHomePath } : {}),
+              ...(openAiApiKey ? { openAiApiKey } : {}),
+              ...(openRouterApiKey ? { openRouterApiKey } : {}),
+            },
+          }
+        : undefined;
+    case "copilot":
+      return copilotBinaryPath
+        ? {
+            copilot: {
+              binaryPath: copilotBinaryPath,
+            },
+          }
+        : undefined;
+    case "opencode":
+      return opencodeBinaryPath || openRouterApiKey
+        ? {
+            opencode: {
+              ...(opencodeBinaryPath ? { binaryPath: opencodeBinaryPath } : {}),
+              ...(openRouterApiKey ? { openRouterApiKey } : {}),
+            },
+          }
+        : undefined;
+    case "kimi":
+      return kimiBinaryPath || kimiApiKey
+        ? {
+            kimi: {
+              ...(kimiBinaryPath ? { binaryPath: kimiBinaryPath } : {}),
+              ...(kimiApiKey ? { apiKey: kimiApiKey } : {}),
+            },
+          }
+        : undefined;
+    case "pi":
+      return undefined;
+    default:
+      return undefined;
+  }
 }
 
 function toEpoch(value: string | null | undefined): number {
@@ -264,6 +346,10 @@ function isCommandWorkEntry(entry: WorkLogEntry): boolean {
   );
 }
 function commandMergeKey(entry: WorkLogEntry): string | null {
+  const runId = entry.runId?.trim();
+  if (runId && runId.length > 0) {
+    return `run:${runId}`;
+  }
   const itemId = entry.itemId?.trim();
   if (itemId && itemId.length > 0) {
     return `item:${itemId}`;
@@ -284,20 +370,22 @@ function isRunningCommandEntry(entry: WorkLogEntry): boolean {
   );
 }
 function isSettledCommandEntry(entry: WorkLogEntry): boolean {
-  if (entry.tone === "error") {
-    return true;
-  }
   const activityKind = entry.activityKind?.trim().toLowerCase();
   const label = entry.label.trim().toLowerCase();
   if (
     activityKind === "terminal.command.completed" ||
+    activityKind === "terminal.command.exited" ||
+    activityKind === "terminal.command.failed" ||
     activityKind === "tool.completed" ||
     label === "command completed" ||
     label === "command failed"
   ) {
     return true;
   }
-  return !isRunningCommandEntry(entry) && Boolean(entry.itemId);
+  if (entry.exitCode !== undefined) {
+    return true;
+  }
+  return false;
 }
 function mergeCommandOutputDetail(
   currentDetail: string | undefined,
@@ -319,60 +407,131 @@ function mergeCommandOutputDetail(
     currentDetail.endsWith("\n") || incomingDetail.startsWith("\n") ? "" : "\n";
   return `${currentDetail}${separator}${incomingDetail}`;
 }
+function isRuntimeErrorLikeEntry(entry: WorkLogEntry): boolean {
+  const activityKind = entry.activityKind?.trim().toLowerCase();
+  const label = entry.label.trim().toLowerCase();
+  return activityKind === "runtime.error" || label === "runtime error";
+}
+function mergeIntoCommandEntry(existing: WorkLogEntry, entry: WorkLogEntry): WorkLogEntry {
+  const mergedCommand = entry.command ?? existing.command;
+  const mergedDetail = mergeCommandOutputDetail(existing.detail, entry.detail);
+  const mergedChangedFiles = entry.changedFiles ?? existing.changedFiles;
+  const mergedItemType = entry.itemType ?? existing.itemType;
+  const mergedRequestKind = entry.requestKind ?? existing.requestKind;
+  const mergedToolTitle = entry.toolTitle ?? existing.toolTitle;
+  const mergedItemId = entry.itemId ?? existing.itemId;
+  const mergedActivityKind = entry.activityKind ?? existing.activityKind;
+  const runtimeErrorLike = isRuntimeErrorLikeEntry(entry);
+  const hasErrorTone = existing.tone === "error" || entry.tone === "error" || runtimeErrorLike;
+  const normalizedEntryLabel = entry.label.trim().toLowerCase();
+  const mergedLabel =
+    runtimeErrorLike
+      ? existing.label
+      : hasErrorTone && normalizedEntryLabel === "command completed"
+        ? existing.label
+        : entry.label;
+  const mergedTone = hasErrorTone ? "error" : entry.tone;
+  const mergedExitCode = entry.exitCode !== undefined ? entry.exitCode : existing.exitCode;
+  return {
+    ...existing,
+    ...entry,
+    createdAt: existing.createdAt,
+    tone: mergedTone,
+    label: mergedLabel,
+    ...(mergedExitCode !== undefined ? { exitCode: mergedExitCode } : {}),
+    ...(mergedCommand !== undefined ? { command: mergedCommand } : {}),
+    ...(mergedDetail !== undefined ? { detail: mergedDetail } : {}),
+    ...(mergedChangedFiles !== undefined ? { changedFiles: mergedChangedFiles } : {}),
+    ...(mergedItemType !== undefined ? { itemType: mergedItemType } : {}),
+    ...(mergedRequestKind !== undefined ? { requestKind: mergedRequestKind } : {}),
+    ...(mergedToolTitle !== undefined ? { toolTitle: mergedToolTitle } : {}),
+    ...(existing.alwaysVisible || entry.alwaysVisible ? { alwaysVisible: true } : {}),
+    ...(mergedItemId !== undefined ? { itemId: mergedItemId } : {}),
+    ...(mergedActivityKind !== undefined ? { activityKind: mergedActivityKind } : {}),
+  };
+}
 function mergeCommandProgressEntries(entries: ReadonlyArray<WorkLogEntry>): WorkLogEntry[] {
   const merged: WorkLogEntry[] = [];
   const activeCommandIndexByKey = new Map<string, number>();
+  const latestCommandIndexByKey = new Map<string, number>();
+  const latestCommandIndexByTurnId = new Map<string, number>();
+  let latestCommandIndex: number | undefined;
+  const rememberLatestCommandIndex = (entry: WorkLogEntry, index: number) => {
+    latestCommandIndex = index;
+    if (entry.turnId) {
+      latestCommandIndexByTurnId.set(entry.turnId, index);
+    }
+  };
+  const resolveFallbackCommandIndex = (entry: WorkLogEntry): number | undefined => {
+    if (entry.turnId) {
+      const latestTurnCommandIndex = latestCommandIndexByTurnId.get(entry.turnId);
+      if (latestTurnCommandIndex !== undefined) {
+        return latestTurnCommandIndex;
+      }
+    }
+    let latestActiveCommandIndex: number | undefined;
+    for (const candidateIndex of activeCommandIndexByKey.values()) {
+      if (latestActiveCommandIndex === undefined || candidateIndex > latestActiveCommandIndex) {
+        latestActiveCommandIndex = candidateIndex;
+      }
+    }
+    return latestActiveCommandIndex ?? latestCommandIndex;
+  };
   for (const entry of entries) {
+    const key = commandMergeKey(entry);
     if (!isCommandWorkEntry(entry)) {
+      if (key) {
+        const latestIndex = latestCommandIndexByKey.get(key);
+        const existing = latestIndex !== undefined ? merged[latestIndex] : undefined;
+        if (latestIndex !== undefined && existing && isCommandWorkEntry(existing)) {
+          merged[latestIndex] = mergeIntoCommandEntry(existing, entry);
+          rememberLatestCommandIndex(merged[latestIndex] ?? existing, latestIndex);
+          continue;
+        }
+      }
+      if (isRuntimeErrorLikeEntry(entry)) {
+        const fallbackIndex = resolveFallbackCommandIndex(entry);
+        const fallbackCommand = fallbackIndex !== undefined ? merged[fallbackIndex] : undefined;
+        if (fallbackIndex !== undefined && fallbackCommand && isCommandWorkEntry(fallbackCommand)) {
+          merged[fallbackIndex] = mergeIntoCommandEntry(fallbackCommand, entry);
+          rememberLatestCommandIndex(merged[fallbackIndex] ?? fallbackCommand, fallbackIndex);
+          continue;
+        }
+      }
       merged.push(entry);
       continue;
     }
-    const key = commandMergeKey(entry);
     if (!key) {
       merged.push(entry);
+      rememberLatestCommandIndex(entry, merged.length - 1);
       continue;
     }
     const existingIndex = activeCommandIndexByKey.get(key);
     if (existingIndex === undefined) {
       merged.push(entry);
-      if (isRunningCommandEntry(entry)) {
+      latestCommandIndexByKey.set(key, merged.length - 1);
+      rememberLatestCommandIndex(entry, merged.length - 1);
+      if (!isSettledCommandEntry(entry)) {
         activeCommandIndexByKey.set(key, merged.length - 1);
+      } else {
+        activeCommandIndexByKey.delete(key);
       }
       continue;
     }
     const existing = merged[existingIndex];
-    if (!existing) {
+    if (!existing || !isCommandWorkEntry(existing)) {
       activeCommandIndexByKey.delete(key);
       merged.push(entry);
-      if (isRunningCommandEntry(entry)) {
+      latestCommandIndexByKey.set(key, merged.length - 1);
+      rememberLatestCommandIndex(entry, merged.length - 1);
+      if (!isSettledCommandEntry(entry)) {
         activeCommandIndexByKey.set(key, merged.length - 1);
       }
       continue;
     }
-    const mergedCommand = entry.command ?? existing.command;
-    const mergedDetail = mergeCommandOutputDetail(existing.detail, entry.detail);
-    const mergedChangedFiles = entry.changedFiles ?? existing.changedFiles;
-    const mergedItemType = entry.itemType ?? existing.itemType;
-    const mergedRequestKind = entry.requestKind ?? existing.requestKind;
-    const mergedToolTitle = entry.toolTitle ?? existing.toolTitle;
-    const mergedItemId = entry.itemId ?? existing.itemId;
-    const mergedActivityKind = entry.activityKind ?? existing.activityKind;
-    merged[existingIndex] = {
-      ...existing,
-      ...entry,
-      createdAt: existing.createdAt,
-      tone: entry.tone,
-      label: entry.label,
-      ...(mergedCommand !== undefined ? { command: mergedCommand } : {}),
-      ...(mergedDetail !== undefined ? { detail: mergedDetail } : {}),
-      ...(mergedChangedFiles !== undefined ? { changedFiles: mergedChangedFiles } : {}),
-      ...(mergedItemType !== undefined ? { itemType: mergedItemType } : {}),
-      ...(mergedRequestKind !== undefined ? { requestKind: mergedRequestKind } : {}),
-      ...(mergedToolTitle !== undefined ? { toolTitle: mergedToolTitle } : {}),
-      ...(existing.alwaysVisible || entry.alwaysVisible ? { alwaysVisible: true } : {}),
-      ...(mergedItemId !== undefined ? { itemId: mergedItemId } : {}),
-      ...(mergedActivityKind !== undefined ? { activityKind: mergedActivityKind } : {}),
-    };
+    merged[existingIndex] = mergeIntoCommandEntry(existing, entry);
+    latestCommandIndexByKey.set(key, existingIndex);
+    rememberLatestCommandIndex(merged[existingIndex] ?? existing, existingIndex);
     if (isSettledCommandEntry(entry)) {
       activeCommandIndexByKey.delete(key);
     } else {
@@ -545,7 +704,7 @@ function DraftCommandEntryRow({
               <div
                 ref={outputScrollRef}
                 onScroll={onOutputScroll}
-                className="h-[58vh] max-h-[72vh] overflow-y-auto px-3 py-3"
+                className="max-h-[72vh] overflow-y-auto px-3 py-3"
               >
                 {hasOutput ? (
                   <pre className="whitespace-pre-wrap break-words font-mono text-xs text-foreground">
@@ -591,6 +750,49 @@ function normalizeDiffPath(path: string): string {
   }
   return trimmed;
 }
+function normalizeDiffPathForComparison(path: string): string {
+  return normalizeDiffPath(path)
+    .replace(/\\/g, "/")
+    .replace(/^[a-z]:\//i, "")
+    .replace(/^\/+/, "")
+    .replace(/^\.\/+/, "")
+    .toLowerCase();
+}
+function diffPathMatchScore(leftPath: string, rightPath: string): number {
+  if (leftPath.length === 0 || rightPath.length === 0) {
+    return -1;
+  }
+  if (leftPath === rightPath) {
+    return Math.max(leftPath.length, rightPath.length) + 1000;
+  }
+  if (leftPath.endsWith(`/${rightPath}`)) {
+    return rightPath.length;
+  }
+  if (rightPath.endsWith(`/${leftPath}`)) {
+    return leftPath.length;
+  }
+  return -1;
+}
+function findBestMatchingDiffTab(input: {
+  changedFilePath: string;
+  diffTabsByPath: ReadonlyMap<string, DraftFileChangeTab>;
+  consumedNormalizedPaths: ReadonlySet<string>;
+}): { normalizedPath: string; tab: DraftFileChangeTab } | null {
+  const normalizedChangedPath = normalizeDiffPathForComparison(input.changedFilePath);
+  let bestMatch: { normalizedPath: string; tab: DraftFileChangeTab } | null = null;
+  let bestScore = -1;
+  for (const [normalizedPath, tab] of input.diffTabsByPath.entries()) {
+    if (input.consumedNormalizedPaths.has(normalizedPath)) {
+      continue;
+    }
+    const score = diffPathMatchScore(normalizedChangedPath, normalizedPath);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = { normalizedPath, tab };
+    }
+  }
+  return bestScore >= 0 ? bestMatch : null;
+}
 
 function extractDiffPath(diffBlock: string): string | null {
   const diffHeaderMatch = /^diff --git a\/(.+?) b\/(.+)$/m.exec(diffBlock);
@@ -626,48 +828,263 @@ function splitUnifiedDiffByFile(text: string): Array<{ path: string; content: st
     })
     .filter((entry): entry is { path: string; content: string } => entry !== null);
 }
+function isLikelyUnifiedHunkOnlyText(value: string): boolean {
+  const trimmed = value.trim();
+  return (
+    /^@@ /m.test(trimmed) &&
+    !/^diff --git /m.test(trimmed) &&
+    !/^--- a\//m.test(trimmed) &&
+    !/^\+\+\+ b\//m.test(trimmed)
+  );
+}
+function toSyntheticDiffPath(path: string): string {
+  const normalized = normalizeDiffPath(path)
+    .replace(/\\/g, "/")
+    .replace(/^[a-z]:\//i, "")
+    .replace(/^\/+/, "")
+    .replace(/^\.\/+/, "")
+    .trim();
+  return normalized.length > 0 ? normalized : "file";
+}
+function buildSyntheticUnifiedDiff(content: string, filePath: string): string {
+  const normalizedPath = toSyntheticDiffPath(filePath);
+  return [
+    `diff --git a/${normalizedPath} b/${normalizedPath}`,
+    `--- a/${normalizedPath}`,
+    `+++ b/${normalizedPath}`,
+    content.trim(),
+  ].join("\n");
+}
+const DRAFT_FILE_DIFF_UNSAFE_CSS = `
+[data-diffs-header],
+[data-diff],
+[data-file],
+[data-error-wrapper],
+[data-virtualizer-buffer] {
+  --diffs-font-family: var(--font-code-snippet) !important;
+  --diffs-bg: color-mix(in srgb, var(--card) 90%, var(--background)) !important;
+  --diffs-light-bg: color-mix(in srgb, var(--card) 90%, var(--background)) !important;
+  --diffs-dark-bg: color-mix(in srgb, var(--card) 90%, var(--background)) !important;
+  --diffs-token-light-bg: transparent;
+  --diffs-token-dark-bg: transparent;
+  --diffs-bg-context-override: color-mix(in srgb, var(--background) 97%, var(--foreground));
+  --diffs-bg-hover-override: color-mix(in srgb, var(--background) 94%, var(--foreground));
+  --diffs-bg-separator-override: color-mix(in srgb, var(--background) 95%, var(--foreground));
+  --diffs-bg-buffer-override: color-mix(in srgb, var(--background) 90%, var(--foreground));
+  --diffs-bg-addition-override: color-mix(in srgb, var(--background) 92%, var(--success));
+  --diffs-bg-addition-number-override: color-mix(in srgb, var(--background) 88%, var(--success));
+  --diffs-bg-addition-hover-override: color-mix(in srgb, var(--background) 85%, var(--success));
+  --diffs-bg-addition-emphasis-override: color-mix(in srgb, var(--background) 80%, var(--success));
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--background) 92%, var(--destructive));
+  --diffs-bg-deletion-number-override: color-mix(
+    in srgb,
+    var(--background) 88%,
+    var(--destructive)
+  );
+  --diffs-bg-deletion-hover-override: color-mix(
+    in srgb,
+    var(--background) 85%,
+    var(--destructive)
+  );
+  --diffs-bg-deletion-emphasis-override: color-mix(
+    in srgb,
+    var(--background) 80%,
+    var(--destructive)
+  );
+  background-color: var(--diffs-bg) !important;
+}
+
+[data-file-info] {
+  background-color: color-mix(in srgb, var(--card) 94%, var(--foreground)) !important;
+  border-block-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+[data-diffs-header] {
+  background-color: color-mix(in srgb, var(--card) 94%, var(--foreground)) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+`;
+function formatDraftFileChangeTabLabel(path: string): string {
+  const normalizedPath = normalizeDiffPath(path).replace(/\\/g, "/").trim();
+  if (normalizedPath.length === 0) {
+    return "file";
+  }
+  const pathSegments = normalizedPath.split("/").filter((segment) => segment.length > 0);
+  if (pathSegments.length <= 3) {
+    return normalizedPath;
+  }
+  return `…/${pathSegments.slice(-3).join("/")}`;
+}
+type DraftFileChangeRenderableContent =
+  | {
+      kind: "files";
+      files: FileDiffMetadata[];
+    }
+  | {
+      kind: "raw";
+      text: string;
+      reason: string;
+    };
+function parseDraftFileChangeContent(input: {
+  content: string;
+  cacheScope: string;
+  fallbackFilePath: string;
+}): DraftFileChangeRenderableContent {
+  const normalizedContent = input.content.trim();
+  if (normalizedContent.length === 0) {
+    return {
+      kind: "raw",
+      text: normalizedContent,
+      reason: "Diff content is empty for the selected file.",
+    };
+  }
+  const parseFileDiffs = (patchText: string, cacheScope: string): FileDiffMetadata[] | null => {
+    try {
+      const files = parsePatchFiles(patchText, buildPatchCacheKey(patchText, cacheScope)).flatMap(
+        (parsedPatch) => parsedPatch.files,
+      );
+      return files.length > 0 ? files : null;
+    } catch {
+      return null;
+    }
+  };
+  const parsedFiles = parseFileDiffs(normalizedContent, input.cacheScope);
+  if (parsedFiles) {
+    return { kind: "files", files: parsedFiles };
+  }
+  if (isLikelyUnifiedHunkOnlyText(normalizedContent)) {
+    const syntheticDiff = buildSyntheticUnifiedDiff(normalizedContent, input.fallbackFilePath);
+    const parsedSyntheticFiles = parseFileDiffs(syntheticDiff, `${input.cacheScope}:synthetic`);
+    if (parsedSyntheticFiles) {
+      return { kind: "files", files: parsedSyntheticFiles };
+    }
+  }
+  try {
+    return {
+      kind: "raw",
+      text: normalizedContent,
+      reason: "Unsupported diff format. Showing raw diff text.",
+    };
+  } catch {
+    return {
+      kind: "raw",
+      text: normalizedContent,
+      reason: "Failed to parse diff content. Showing raw diff text.",
+    };
+  }
+}
+function resolveDraftFileDiffPath(fileDiff: FileDiffMetadata): string {
+  const rawPath = fileDiff.name ?? fileDiff.prevName ?? "";
+  return normalizeDiffPath(rawPath);
+}
+function buildDraftFileDiffRenderKey(fileDiff: FileDiffMetadata): string {
+  return fileDiff.cacheKey ?? `${fileDiff.prevName ?? "none"}:${fileDiff.name}`;
+}
 
 function buildFileChangeTabs(entry: WorkLogEntry): DraftFileChangeTab[] {
   const changedFiles = [...new Set((entry.changedFiles ?? []).map((path) => path.trim()))].filter(
     (path) => path.length > 0,
   );
+  const structuredFileDiffs = (entry.fileDiffs ?? [])
+    .map((fileDiff) => ({
+      path: fileDiff.path.trim(),
+      content: fileDiff.diff.trim(),
+    }))
+    .filter((fileDiff) => fileDiff.path.length > 0 && fileDiff.content.length > 0);
   const detail = entry.detail?.trim();
   const diffBlocks = detail ? splitUnifiedDiffByFile(detail) : [];
-  const tabByPath = new Map<string, DraftFileChangeTab>();
+  const tabByNormalizedPath = new Map<string, DraftFileChangeTab>();
+  const diffTabCandidates =
+    structuredFileDiffs.length > 0
+      ? structuredFileDiffs
+      : diffBlocks.map((diffBlock) => ({ path: diffBlock.path, content: diffBlock.content }));
 
-  for (const filePath of changedFiles) {
-    tabByPath.set(filePath, { path: filePath, content: null });
-  }
-  for (const diffBlock of diffBlocks) {
-    tabByPath.set(diffBlock.path, { path: diffBlock.path, content: diffBlock.content });
+  for (const diffTab of diffTabCandidates) {
+    const normalizedPath = normalizeDiffPathForComparison(diffTab.path);
+    if (!tabByNormalizedPath.has(normalizedPath)) {
+      tabByNormalizedPath.set(normalizedPath, { path: diffTab.path, content: diffTab.content });
+    }
   }
 
-  if (tabByPath.size === 0) {
+  if (tabByNormalizedPath.size === 0 && changedFiles.length === 0) {
     if (!detail) {
       return [];
     }
     return [{ path: "details", content: detail }];
   }
 
-  if (detail && diffBlocks.length === 0 && changedFiles.length === 1) {
-    const onlyPath = changedFiles[0]!;
-    tabByPath.set(onlyPath, { path: onlyPath, content: detail });
+  if (detail && tabByNormalizedPath.size === 0 && changedFiles.length > 0) {
+    return changedFiles.map((path) => ({
+      path,
+      content: detail,
+    }));
   }
 
-  const orderedPaths = [
-    ...changedFiles,
-    ...[...tabByPath.keys()].filter((path) => !changedFiles.includes(path)),
-  ];
-  return orderedPaths
-    .map((path) => tabByPath.get(path))
-    .filter((tab): tab is DraftFileChangeTab => Boolean(tab));
+  const tabs: DraftFileChangeTab[] = [];
+  const consumedNormalizedPaths = new Set<string>();
+  for (const changedFilePath of changedFiles) {
+    const matchedDiffTab = findBestMatchingDiffTab({
+      changedFilePath,
+      diffTabsByPath: tabByNormalizedPath,
+      consumedNormalizedPaths,
+    });
+    if (matchedDiffTab) {
+      consumedNormalizedPaths.add(matchedDiffTab.normalizedPath);
+    }
+    tabs.push({
+      path: changedFilePath,
+      content: matchedDiffTab?.tab.content ?? null,
+    });
+  }
+  for (const [normalizedPath, tab] of tabByNormalizedPath.entries()) {
+    if (consumedNormalizedPaths.has(normalizedPath)) {
+      continue;
+    }
+    tabs.push(tab);
+  }
+  return tabs;
 }
 
 function DraftFileChangesPanel({ workEntry }: { workEntry: WorkLogEntry }) {
+  const { resolvedTheme, activeCustomThemeId } = useTheme();
   const tabs = useMemo(() => buildFileChangeTabs(workEntry), [workEntry]);
   const [isOpen, setIsOpen] = useState(false);
   const [activePath, setActivePath] = useState<string>(tabs[0]?.path ?? "");
   const activeTab = tabs.find((tab) => tab.path === activePath) ?? tabs[0] ?? null;
+  const parsedActiveTabContent = useMemo(() => {
+    if (!activeTab?.content) {
+      return null;
+    }
+    return parseDraftFileChangeContent({
+      content: activeTab.content,
+      cacheScope: `draft-file-change:${workEntry.id}:${activeTab.path}`,
+      fallbackFilePath: activeTab.path,
+    });
+  }, [activeTab?.content, activeTab?.path, workEntry.id]);
+  const activeTabDiffFiles = useMemo(() => {
+    if (!activeTab || !parsedActiveTabContent || parsedActiveTabContent.kind !== "files") {
+      return [] as FileDiffMetadata[];
+    }
+    const normalizedActivePath = normalizeDiffPathForComparison(activeTab.path);
+    return [...parsedActiveTabContent.files].toSorted((left, right) => {
+      const leftPath = normalizeDiffPathForComparison(resolveDraftFileDiffPath(left));
+      const rightPath = normalizeDiffPathForComparison(resolveDraftFileDiffPath(right));
+      const leftScore = diffPathMatchScore(normalizedActivePath, leftPath);
+      const rightScore = diffPathMatchScore(normalizedActivePath, rightPath);
+      if (leftScore !== rightScore) {
+        return rightScore - leftScore;
+      }
+      return resolveDraftFileDiffPath(left).localeCompare(resolveDraftFileDiffPath(right), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
+  }, [activeTab, parsedActiveTabContent]);
+  const activeDiffThemeName = useMemo(
+    () => resolveDiffThemeName(resolvedTheme, activeCustomThemeId),
+    [activeCustomThemeId, resolvedTheme],
+  );
 
   useEffect(() => {
     if (tabs.length === 0) {
@@ -697,35 +1114,72 @@ function DraftFileChangesPanel({ workEntry }: { workEntry: WorkLogEntry }) {
           }`}
         />
       </CollapsibleTrigger>
-      <CollapsibleContent className="pt-2">
-        <div className="overflow-hidden rounded-xl border border-border bg-card/70">
-          <div className="border-b border-border bg-muted/40 px-2 py-2">
+      <CollapsibleContent className="pt-1.5">
+        <div className="overflow-hidden rounded-xl border border-border/80 bg-card/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="border-b border-border/80 bg-background/30 px-2 py-1.5">
             <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {tabs.map((tab) => (
                 <button
                   key={`${workEntry.id}:${tab.path}`}
                   type="button"
-                  className={`shrink-0 rounded-md border px-2 py-1 font-mono text-[10px] transition ${
+                  className={`app-interactive-motion shrink-0 rounded-md border px-2 py-1 font-mono text-[10px] ${
                     activeTab.path === tab.path
-                      ? "border-border bg-background text-foreground"
-                      : "border-border/70 bg-muted/30 text-muted-foreground hover:bg-muted/50"
+                      ? "border-border bg-card text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+                      : "border-border/70 bg-background/40 text-muted-foreground hover:bg-muted/45 hover:text-foreground"
                   }`}
                   title={tab.path}
                   onClick={() => setActivePath(tab.path)}
                 >
-                  {tab.path}
+                  <span className="block max-w-[240px] truncate">
+                    {formatDraftFileChangeTabLabel(tab.path)}
+                  </span>
                 </button>
               ))}
             </div>
           </div>
-          <div className="max-h-[34vh] overflow-auto px-3 py-2">
+          <div className="border-b border-border/70 bg-background/20 px-3 py-1.5">
+            <p className="truncate font-mono text-[11px] text-muted-foreground" title={activeTab.path}>
+              {activeTab.path}
+            </p>
+          </div>
+          <div className="max-h-[50vh] overflow-auto bg-background/25 px-2 py-2">
             {activeTab.content ? (
-              <pre className="whitespace-pre-wrap break-words font-mono text-xs text-foreground">
-                {activeTab.content}
-              </pre>
+              parsedActiveTabContent?.kind === "files" && activeTabDiffFiles.length > 0 ? (
+                <div className="space-y-2">
+                  {activeTabDiffFiles.map((fileDiff) => (
+                    <div
+                      key={`${workEntry.id}:${activeTab.path}:${buildDraftFileDiffRenderKey(fileDiff)}`}
+                      className="diff-render-file"
+                    >
+                      <FileDiff
+                        fileDiff={fileDiff}
+                        options={{
+                          diffStyle: "unified",
+                          lineDiffType: "none",
+                          theme: activeDiffThemeName,
+                          themeType: resolvedTheme,
+                          unsafeCSS: DRAFT_FILE_DIFF_UNSAFE_CSS,
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2 px-1 py-1">
+                  {parsedActiveTabContent?.kind === "raw" ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      {parsedActiveTabContent.reason}
+                    </p>
+                  ) : null}
+                  <pre className="max-h-[72vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border/70 bg-background/50 p-2 font-mono text-xs text-foreground">
+                    {activeTab.content}
+                  </pre>
+                </div>
+              )
             ) : (
-              <p className="font-mono text-xs text-muted-foreground">
-                Diff content is unavailable for this file in the current tool payload.
+              <p className="px-1 py-1 font-mono text-xs text-muted-foreground">
+                Diff content for this file was not included in the tool payload (only summary-level
+                diff text was provided).
               </p>
             )}
           </div>
@@ -736,7 +1190,9 @@ function DraftFileChangesPanel({ workEntry }: { workEntry: WorkLogEntry }) {
 }
 
 function resolveActionStepTarget(workEntry: WorkLogEntry): string {
-  const command = workEntry.command?.trim();
+  const command = workEntry.command
+    ? sanitizeCommandLabelForDisplay(workEntry.command).trim()
+    : "";
   if (command && command.length > 0) {
     return command;
   }
@@ -927,6 +1383,31 @@ function stripWindowsPromptFragments(value: string): string {
     .replace(/\(c\) Microsoft Corporation\. All rights reserved\./gi, "")
     .trimEnd();
 }
+function unwrapPowerShellCommandWrapper(command: string): string {
+  const trimmed = command.trim();
+  if (trimmed.length === 0) {
+    return trimmed;
+  }
+  const wrapperMatch = /^"?[A-Za-z]:\\[^"\r\n]*powershell\.exe"?\s+-Command\s+([\s\S]+)$/i.exec(
+    trimmed,
+  );
+  if (!wrapperMatch?.[1]) {
+    return trimmed;
+  }
+  let payload = wrapperMatch[1].trim();
+  if (
+    (payload.startsWith("{") && payload.endsWith("}")) ||
+    (payload.startsWith("\"") && payload.endsWith("\"")) ||
+    (payload.startsWith("'") && payload.endsWith("'"))
+  ) {
+    payload = payload.slice(1, -1).trim();
+  }
+  return payload.length > 0 ? payload : trimmed;
+}
+function sanitizeCommandLabelForDisplay(command: string): string {
+  const withoutWrapper = unwrapPowerShellCommandWrapper(command);
+  return withoutWrapper.replace(/^&\s+/, "").trim();
+}
 function collapseDuplicatedConcatenatedLine(line: string): string {
   const trimmed = line.trim();
   if (trimmed.length < 2) {
@@ -1084,10 +1565,7 @@ function resolveWorkHeading(entry: WorkLogEntry): string {
 
 function resolveLatestThread(threads: Thread[], preferredThreadId: ThreadId | null): Thread | null {
   if (preferredThreadId) {
-    const preferred = threads.find((thread) => thread.id === preferredThreadId);
-    if (preferred) {
-      return preferred;
-    }
+    return threads.find((thread) => thread.id === preferredThreadId) ?? null;
   }
   if (threads.length === 0) return null;
   return [...threads].sort(
@@ -1131,6 +1609,12 @@ function DraftRouteView() {
   const threads = useStore((store) => store.threads);
   const projects = useStore((store) => store.projects);
   const threadsHydrated = useStore((store) => store.threadsHydrated);
+  const navigate = useNavigate();
+  const routeSearch = Route.useSearch();
+  const routeSearchThreadId =
+    typeof routeSearch.threadId === "string" && routeSearch.threadId.trim().length > 0
+      ? ThreadId.makeUnsafe(routeSearch.threadId.trim())
+      : null;
   const { data: serverConfig } = useQuery(serverConfigQueryOptions());
   const keybindings = serverConfig?.keybindings ?? EMPTY_KEYBINDINGS;
   const availableEditors = serverConfig?.availableEditors ?? EMPTY_EDITORS;
@@ -1138,6 +1622,8 @@ function DraftRouteView() {
     () => resolvePreferredDraftProvider(serverConfig?.providers ?? []),
     [serverConfig?.providers],
   );
+  const forcedProvider = resolveTemporaryForcedProvider();
+  const { settings } = useAppSettings();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [preferredThreadId, setPreferredThreadId] = useState<ThreadId | null>(null);
@@ -1157,16 +1643,39 @@ function DraftRouteView() {
   >({});
   const [terminalCwdByThreadId, setTerminalCwdByThreadId] = useState<Record<string, string>>({});
   const [notices, setNotices] = useState<RuntimeNotice[]>([]);
+  const [planSidebarOpen, setPlanSidebarOpen] = useState(false);
   const [expandedCommandOutputByKey, setExpandedCommandOutputByKey] = useState<
     Record<string, boolean>
   >({});
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const timelineScrollRef = useRef<HTMLElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
+  const planSidebarDismissedForTurnRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setPreferredThreadId(routeSearchThreadId);
+  }, [routeSearchThreadId]);
 
   const activeThread = useMemo(
     () => resolveLatestThread(threads, preferredThreadId),
     [threads, preferredThreadId],
+  );
+  const selectedDraftThread = useComposerDraftStore((store) =>
+    preferredThreadId ? (store.draftThreadsByThreadId[preferredThreadId] ?? null) : null,
+  );
+  const clearProjectDraftThreadById = useComposerDraftStore(
+    (store) => store.clearProjectDraftThreadById,
+  );
+  const selectDraftThread = useCallback(
+    (threadId: ThreadId | null) => {
+      setPreferredThreadId(threadId);
+      void navigate({
+        to: "/draft",
+        replace: true,
+        search: threadId ? { threadId } : { threadId: undefined },
+      });
+    },
+    [navigate],
   );
   const setTerminalOpen = useTerminalStateStore((state) => state.setTerminalOpen);
   const setTerminalControlState = useTerminalStateStore((state) => state.setTerminalControlState);
@@ -1187,19 +1696,22 @@ function DraftRouteView() {
     if (activeThread) {
       return projects.find((project) => project.id === activeThread.projectId) ?? null;
     }
+    if (selectedDraftThread) {
+      return projects.find((project) => project.id === selectedDraftThread.projectId) ?? null;
+    }
     return projects[0] ?? null;
-  }, [activeThread, projects]);
+  }, [activeThread, projects, selectedDraftThread]);
   const openInCwd = activeThread
     ? activeThread.worktreePath ?? activeProject?.cwd ?? null
-    : activeProject?.cwd ?? null;
+    : selectedDraftThread?.worktreePath ?? activeProject?.cwd ?? null;
   const activeShellCwd = activeThread
     ? (terminalCwdByThreadId[activeThread.id] ?? openInCwd)
     : openInCwd;
   const gitCwd = activeShellCwd ?? openInCwd;
   const { data: gitStatus } = useQuery(gitStatusQueryOptions(gitCwd));
   const projectLabel = activeProject?.name ?? "No project";
-  const branchLabel = gitStatus?.branch ?? activeThread?.branch ?? "main";
-  const title = activeThread?.title ?? "Warp-style Live Draft";
+  const branchLabel = gitStatus?.branch ?? activeThread?.branch ?? selectedDraftThread?.branch ?? "main";
+  const title = activeThread?.title ?? (selectedDraftThread ? "New draft thread" : "Warp-style Live Draft");
   const isThreadBusy =
     activeThread?.session?.orchestrationStatus === "starting" ||
     activeThread?.session?.orchestrationStatus === "running";
@@ -1231,7 +1743,7 @@ function DraftRouteView() {
       ? (promptStartsWithBang ? "command" : "task")
       : currentComposerMode;
   const canSend = prompt.trim().length > 0 && !sending;
-  const providerForFooter = activeThread?.provider ?? preferredProvider;
+  const providerForFooter = forcedProvider ?? preferredProvider;
   const modelForFooter = activeThread?.model
     ? resolveModelSlugForProvider(providerForFooter, activeThread.model)
     : resolveModelSlugForProvider(
@@ -1248,8 +1760,6 @@ function DraftRouteView() {
     usedTokens: contextState.usedTokens,
     totalTokens: contextState.totalTokens,
   });
-  const unifiedInteractionBundleEnabled =
-    import.meta.env.VITE_DRAFT_UNIFIED_INTERACTIONS !== "0";
   const draftModelOptions = useMemo(
     () =>
       resolveDraftModelOptions({
@@ -1259,7 +1769,84 @@ function DraftRouteView() {
       }),
     [modelForFooter, providerForFooter, serverConfig?.providers],
   );
+  const latestPlanTurnId =
+    activeThread?.latestTurn?.turnId ?? activeThread?.session?.activeTurnId ?? null;
+  const activeProposedPlan = useMemo(
+    () =>
+      activeThread ? findLatestProposedPlan(activeThread.proposedPlans, latestPlanTurnId) : null,
+    [activeThread, latestPlanTurnId],
+  );
+  const activePlan = useMemo(
+    () =>
+      activeThread
+        ? deriveActivePlanState(activeThread.activities, latestPlanTurnId ?? undefined)
+        : null,
+    [activeThread, latestPlanTurnId],
+  );
+  const activePlanSidebarKey = useMemo(() => {
+    if (activePlan?.turnId) {
+      return activePlan.turnId;
+    }
+    if (activeProposedPlan?.turnId) {
+      return activeProposedPlan.turnId;
+    }
+    return activeProposedPlan ? `proposed:${activeProposedPlan.id}` : null;
+  }, [activePlan?.turnId, activeProposedPlan]);
+  const hasPlanSidebarContent = activePlan !== null || activeProposedPlan !== null;
   const [selectedDraftModel, setSelectedDraftModel] = useState(modelForFooter);
+  const selectedModelForFooter = resolveModelSlugForProvider(
+    providerForFooter,
+    selectedDraftModel || modelForFooter,
+  );
+  const codexAuthSourceIndicator = useMemo<{
+    label: string;
+    description: string;
+    tone: "success" | "warning" | "outline";
+  } | null>(() => {
+    if (providerForFooter !== "codex") {
+      return null;
+    }
+
+    const hasOpenAiApiKey = settings.openAiApiKey.trim().length > 0;
+    const hasOpenRouterApiKey = settings.openRouterApiKey.trim().length > 0;
+    const modelUsesOpenRouter = isCodexOpenRouterModel(selectedModelForFooter);
+
+    if (modelUsesOpenRouter) {
+      if (hasOpenRouterApiKey) {
+        return {
+          label: "OpenRouter key",
+          description: "Codex is using your configured OpenRouter API key.",
+          tone: "success",
+        };
+      }
+      return {
+        label: "OpenRouter key missing",
+        description:
+          "This Codex model routes through OpenRouter. Add an OpenRouter API key in Settings.",
+        tone: "warning",
+      };
+    }
+
+    if (hasOpenAiApiKey) {
+      return {
+        label: "OpenAI key",
+        description: "Codex is using your configured OpenAI API key.",
+        tone: "success",
+      };
+    }
+
+    return {
+      label: "Codex login",
+      description:
+        "No OpenAI key is configured, so Draft falls back to your Codex CLI login session.",
+      tone: "outline",
+    };
+  }, [
+    providerForFooter,
+    selectedModelForFooter,
+    settings.openAiApiKey,
+    settings.openRouterApiKey,
+  ]);
   const gitInsertions = gitStatus?.workingTree.insertions ?? 0;
   const gitDeletions = gitStatus?.workingTree.deletions ?? 0;
   const cwdLabel = activeShellCwd ?? "No directory";
@@ -1299,7 +1886,7 @@ function DraftRouteView() {
   }, [pendingApprovals, pendingUserInputs, timelineEntries]);
   const activeTimelineRenderables = useMemo(
     () =>
-      unifiedInteractionBundleEnabled
+      import.meta.env.VITE_DRAFT_UNIFIED_INTERACTIONS !== "0"
         ? timelineRenderables
         : timelineEntries.map((entry) => ({
             id: `entry:${entry.id}`,
@@ -1307,7 +1894,7 @@ function DraftRouteView() {
             kind: "entry" as const,
             entry,
           })),
-    [timelineEntries, timelineRenderables, unifiedInteractionBundleEnabled],
+    [timelineEntries, timelineRenderables],
   );
   const activeTerminalRuns = useMemo(
     () => terminalRunsByThreadId[activeThread?.id ?? "__draft"] ?? [],
@@ -1360,33 +1947,6 @@ function DraftRouteView() {
       .filter((entry) => entry.trim().toLowerCase() !== query)
       .slice(0, 6);
   }, [activeSuggestionPool, prompt, suggestionActive]);
-  const qualityMetrics = useMemo(() => {
-    if (!activeThread) return null;
-    const firstUserMessage = activeThread.messages.find((message) => message.role === "user");
-    const firstCommandEntry = timelineEntries.find(
-      (entry) => entry.kind === "work" && isCommandWorkEntry(entry.entry),
-    );
-    const commandCompletionEntries = timelineEntries
-      .flatMap((entry) => (entry.kind === "work" && isCommandWorkEntry(entry.entry) ? [entry.entry] : []))
-      .filter((entry) => entry.exitCode !== undefined || entry.tone === "error");
-    const startupToReadyMs =
-      activeThread.session?.createdAt && activeThread.latestTurn?.startedAt
-        ? Math.max(
-            0,
-            Date.parse(activeThread.latestTurn.startedAt) - Date.parse(activeThread.session.createdAt),
-          )
-        : null;
-    const firstCommandLatencyMs =
-      firstUserMessage && firstCommandEntry
-        ? Math.max(0, Date.parse(firstCommandEntry.createdAt) - Date.parse(firstUserMessage.createdAt))
-        : null;
-    return {
-      startupToReadyMs,
-      firstCommandLatencyMs,
-      commandCompletions: commandCompletionEntries.length,
-      pendingApprovals: pendingApprovals.length,
-    };
-  }, [activeThread, pendingApprovals.length, timelineEntries]);
   const scrollTimelineToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     const scrollContainer = timelineScrollRef.current;
     if (!scrollContainer) return;
@@ -1423,6 +1983,19 @@ function DraftRouteView() {
     setExpandedCommandOutputByKey({});
   }, [activeThread?.id]);
   useEffect(() => {
+    setPlanSidebarOpen(false);
+    planSidebarDismissedForTurnRef.current = null;
+  }, [activeThread?.id]);
+  useEffect(() => {
+    if (!hasPlanSidebarContent || !activePlanSidebarKey || planSidebarOpen) {
+      return;
+    }
+    if (planSidebarDismissedForTurnRef.current === activePlanSidebarKey) {
+      return;
+    }
+    setPlanSidebarOpen(true);
+  }, [activePlanSidebarKey, hasPlanSidebarContent, planSidebarOpen]);
+  useEffect(() => {
     setSuggestionActive(false);
     setHistoryIndexByThreadId((existing) => ({ ...existing, [activeThreadKey]: -1 }));
   }, [activeThreadKey]);
@@ -1453,6 +2026,28 @@ function DraftRouteView() {
       const next = [...existing, { id: randomUUID(), tone, text }];
       return next.slice(-6);
     });
+  }, []);
+  const dismissNotice = useCallback((noticeId: string) => {
+    setNotices((existing) => existing.filter((notice) => notice.id !== noticeId));
+  }, []);
+  const clearNotices = useCallback(() => {
+    setNotices([]);
+  }, []);
+  const togglePlanSidebar = useCallback(() => {
+    setPlanSidebarOpen((open) => {
+      if (open) {
+        if (activePlanSidebarKey) {
+          planSidebarDismissedForTurnRef.current = activePlanSidebarKey;
+        }
+      } else {
+        planSidebarDismissedForTurnRef.current = null;
+      }
+      return !open;
+    });
+  }, [activePlanSidebarKey]);
+  const openPlanSidebar = useCallback(() => {
+    planSidebarDismissedForTurnRef.current = null;
+    setPlanSidebarOpen(true);
   }, []);
   useEffect(() => {
     const api = readNativeApi();
@@ -1534,6 +2129,86 @@ function DraftRouteView() {
       unsubscribe();
     };
   }, []);
+  useEffect(() => {
+    const handler = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented || !activeThread) {
+        return;
+      }
+      const terminalFocus = isTerminalFocused();
+      const command = resolveShortcutCommand(event, keybindings, {
+        context: {
+          terminalFocus,
+          terminalOpen: Boolean(terminalState.terminalOpen),
+        },
+      });
+      if (command !== "chat.interrupt") {
+        return;
+      }
+
+      const threadRuns = terminalRunsByThreadId[activeThread.id] ?? [];
+      const hasRunningTerminalCommand = threadRuns.some((run) => run.status === "running");
+      if (!isThreadBusy && !hasRunningTerminalCommand) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const api = readNativeApi();
+      if (!api) {
+        addNotice("error", "Native API unavailable. Could not interrupt active work.");
+        return;
+      }
+
+      if (hasRunningTerminalCommand) {
+        const targetTerminalId =
+          terminalState.activeTerminalId || threadRuns[threadRuns.length - 1]?.terminalId || "default";
+        void api.terminal
+          .write({
+            threadId: activeThread.id,
+            terminalId: targetTerminalId,
+            data: "\u0003",
+          })
+          .catch((error) => {
+            addNotice(
+              "error",
+              error instanceof Error
+                ? error.message
+                : "Failed to interrupt the active shell command.",
+            );
+          });
+      }
+
+      if (isThreadBusy) {
+        void api.orchestration
+          .dispatchCommand({
+            type: "thread.turn.interrupt",
+            commandId: newCommandId(),
+            threadId: activeThread.id,
+            createdAt: new Date().toISOString(),
+          })
+          .catch((error) => {
+            addNotice(
+              "error",
+              error instanceof Error ? error.message : "Failed to interrupt the active turn.",
+            );
+          });
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+    };
+  }, [
+    activeThread,
+    addNotice,
+    isThreadBusy,
+    keybindings,
+    terminalRunsByThreadId,
+    terminalState.activeTerminalId,
+    terminalState.terminalOpen,
+  ]);
 
   const createLiveThread = async (
     seedText: string,
@@ -1558,11 +2233,18 @@ function DraftRouteView() {
       addNotice("error", "No project available. Add a project first.");
       return null;
     }
-    const provider = preferredProvider;
+    const provider = forcedProvider ?? preferredProvider;
     const model = resolveModelSlugForProvider(
       provider,
       selectedDraftModel || targetProject.model?.trim(),
     );
+    const draftThreadContext =
+      selectedDraftThread && selectedDraftThread.projectId === targetProject.id
+        ? selectedDraftThread
+        : null;
+    const nextRuntimeMode = draftThreadContext?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
+    const nextInteractionMode =
+      draftThreadContext?.interactionMode ?? DEFAULT_PROVIDER_INTERACTION_MODE;
     const threadId = newThreadId();
     const createdAt = new Date().toISOString();
 
@@ -1573,26 +2255,28 @@ function DraftRouteView() {
       projectId: targetProject.id,
       title: truncateTitle(seedText || "Live draft thread"),
       model,
-      runtimeMode: DEFAULT_RUNTIME_MODE,
-      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-      branch: null,
-      worktreePath: null,
+      runtimeMode: nextRuntimeMode,
+      interactionMode: nextInteractionMode,
+      branch: draftThreadContext?.branch ?? null,
+      worktreePath: draftThreadContext?.worktreePath ?? null,
       createdAt,
     });
-
-    setPreferredThreadId(threadId);
+    if (draftThreadContext && preferredThreadId) {
+      clearProjectDraftThreadById(targetProject.id, preferredThreadId);
+    }
+    selectDraftThread(threadId);
     addNotice("success", "Created live thread in orchestration runtime.");
     return {
       threadId,
       model,
-      runtimeMode: DEFAULT_RUNTIME_MODE,
-      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+      runtimeMode: nextRuntimeMode,
+      interactionMode: nextInteractionMode,
       provider,
     };
   };
   const onSelectThreadFromSidebar = useCallback((threadId: ThreadId) => {
-    setPreferredThreadId(threadId);
-  }, []);
+    selectDraftThread(threadId);
+  }, [selectDraftThread]);
   const onCreateThreadInProjectFromSidebar = useCallback(
     async (projectId: Thread["projectId"]) => {
       await createLiveThread("Live draft thread", projectId);
@@ -1688,9 +2372,14 @@ function DraftRouteView() {
     return true;
   }, [commandSuggestions, prompt, promptSuggestions, resolvedIntentMode]);
   const onPromptKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>) => {
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
       if (event.key === "Tab" && suggestionActive && applySuggestionFromMode()) {
         event.preventDefault();
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey && !event.getModifierState("Shift")) {
+        event.preventDefault();
+        event.currentTarget.form?.requestSubmit();
         return;
       }
       if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
@@ -1721,9 +2410,11 @@ function DraftRouteView() {
   const onPromptChange = useCallback(
     (value: string) => {
       setPrompt(value);
-      setHistoryIndexByThreadId((existing) => ({ ...existing, [activeThreadKey]: -1 }));
+      setHistoryIndexByThreadId((existing) =>
+        existing[activeThreadKey] === -1 ? existing : { ...existing, [activeThreadKey]: -1 },
+      );
       const hasTypedText = value.trim().length > 0;
-      setSuggestionActive(hasTypedText);
+      setSuggestionActive((current) => (current === hasTypedText ? current : hasTypedText));
     },
     [activeThreadKey],
   );
@@ -1752,9 +2443,9 @@ function DraftRouteView() {
         activeThread !== null
           ? {
               threadId: activeThread.id,
-              provider: activeThread.provider ?? preferredProvider,
+              provider: forcedProvider ?? preferredProvider,
               model: resolveModelSlugForProvider(
-                activeThread.provider ?? preferredProvider,
+                forcedProvider ?? preferredProvider,
                 activeThread.model,
               ),
               runtimeMode: activeThread.runtimeMode,
@@ -1848,7 +2539,7 @@ function DraftRouteView() {
           }
         }
 
-        setPreferredThreadId(target.threadId);
+        selectDraftThread(target.threadId);
         setComposerModeByThreadId((existing) => ({
           ...existing,
           [target.threadId]: nextModeForThread,
@@ -1873,6 +2564,20 @@ function DraftRouteView() {
       const outgoingText = terminalContext
         ? `${textForDispatch}\n\n${terminalContext.context}`
         : textForDispatch;
+      const providerForDispatch = forcedProvider ?? target.provider ?? providerForFooter;
+      const providerOptionsForDispatch = buildProviderOptionsForDispatch({
+        provider: providerForDispatch,
+        settings: {
+          codexBinaryPath: settings.codexBinaryPath,
+          codexHomePath: settings.codexHomePath,
+          openAiApiKey: settings.openAiApiKey,
+          openRouterApiKey: settings.openRouterApiKey,
+          copilotBinaryPath: settings.copilotBinaryPath,
+          opencodeBinaryPath: settings.opencodeBinaryPath,
+          kimiBinaryPath: settings.kimiBinaryPath,
+          kimiApiKey: settings.kimiApiKey,
+        },
+      });
 
       const createdAt = new Date().toISOString();
       await api.orchestration.dispatchCommand({
@@ -1885,12 +2590,15 @@ function DraftRouteView() {
           text: outgoingText,
           attachments: [],
         },
-        ...(target.provider ? { provider: target.provider } : {}),
+        ...(providerForDispatch ? { provider: providerForDispatch } : {}),
         model:
           resolveModelSlugForProvider(
-            target.provider ?? providerForFooter,
+            providerForDispatch,
             selectedDraftModel || target.model?.trim(),
           ) || DEFAULT_MODEL_BY_PROVIDER.codex,
+        ...(providerOptionsForDispatch
+          ? { providerOptions: providerOptionsForDispatch }
+          : {}),
         runtimeMode: target.runtimeMode,
         interactionMode: target.interactionMode,
         createdAt,
@@ -1911,7 +2619,7 @@ function DraftRouteView() {
           };
         });
       }
-      setPreferredThreadId(target.threadId);
+      selectDraftThread(target.threadId);
       setComposerModeByThreadId((existing) => ({ ...existing, [target.threadId]: nextModeForThread }));
       setHistoryByThreadId((existing) => ({
         ...existing,
@@ -1927,6 +2635,201 @@ function DraftRouteView() {
       setSending(false);
     }
   };
+  const draftTimelineContent = useMemo(
+    () => (
+      <div className="space-y-4">
+        {draftRenderables.map((renderable) => {
+          if (renderable.renderKind === "terminal-run") {
+            return <DraftInlineTerminalRunRow key={renderable.id} run={renderable.run} />;
+          }
+          if (renderable.kind === "pending-approval") {
+            return (
+              <DraftApprovalBlock
+                key={renderable.id}
+                approval={renderable.approval}
+                isResponding={respondingApprovalRequestIds.includes(renderable.approval.requestId)}
+                onRespondToApproval={onRespondToApproval}
+              />
+            );
+          }
+          if (renderable.kind === "pending-input") {
+            return <DraftPendingInputBlock key={renderable.id} input={renderable.input} />;
+          }
+          const entry = renderable.entry;
+          if (entry.kind === "message") {
+            if (entry.message.role === "user") {
+              return (
+                <div key={entry.id} className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-muted/40 text-foreground">
+                      <UserIcon className="size-3" />
+                    </span>
+                    <p className="max-w-4xl whitespace-pre-wrap break-words font-medium text-foreground">
+                      {stripDraftTerminalContextEnvelope(entry.message.text)}
+                    </p>
+                  </div>
+                  {entry.message.attachments && entry.message.attachments.length > 0 ? (
+                    <div className="ml-7 flex flex-wrap gap-2">
+                      {entry.message.attachments.map((attachment) => (
+                        <span
+                          key={attachment.id}
+                          className="rounded-md border border-border bg-muted/40 px-2 py-1 font-mono text-xs text-muted-foreground"
+                        >
+                          {attachment.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+
+            if (entry.message.role === "assistant") {
+              const messageText = entry.message.text || (entry.message.streaming ? "" : "(empty response)");
+              return (
+                <div key={entry.id} className="ml-7 space-y-1">
+                  <div className="max-w-4xl text-[15px] leading-6 text-foreground">
+                    <ChatMarkdown
+                      text={messageText}
+                      cwd={openInCwd ?? undefined}
+                      isStreaming={entry.message.streaming}
+                    />
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div
+                key={entry.id}
+                className="ml-7 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+              >
+                {entry.message.text}
+              </div>
+            );
+          }
+
+          if (entry.kind === "proposed-plan") {
+            return (
+              <div key={entry.id} className="ml-7 rounded-xl border border-border bg-card/60 px-3 py-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Proposed plan</p>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    className="h-6 border-border bg-background/80 px-2 text-[11px] text-foreground hover:bg-muted/50"
+                    onClick={openPlanSidebar}
+                  >
+                    <ListTodoIcon className="size-3.5" />
+                    Open plan
+                  </Button>
+                </div>
+                <div className="text-sm text-foreground">
+                  <ChatMarkdown text={entry.proposedPlan.planMarkdown} cwd={openInCwd ?? undefined} />
+                </div>
+              </div>
+            );
+          }
+
+          const workEntry = entry.entry;
+          if (isCommandWorkEntry(workEntry)) {
+            const status = commandStatusLabel(workEntry);
+            const commandTextSanitized = sanitizeCommandLabelForDisplay(
+              workEntry.command?.trim() || workEntry.label,
+            ).trim();
+            const commandText = commandTextSanitized.length > 0 ? commandTextSanitized : workEntry.label;
+            const commandLabel =
+              workEntry.alwaysVisible && !commandText.startsWith("!")
+                ? `! ${commandText}`
+                : commandText;
+            const stateKey = commandDropdownStateKey(workEntry);
+            const isOutputExpanded = expandedCommandOutputByKey[stateKey] ?? false;
+            return (
+              <DraftCommandEntryRow
+                key={entry.id}
+                workEntry={workEntry}
+                commandLabel={commandLabel}
+                status={status}
+                isOutputExpanded={isOutputExpanded}
+                onOutputExpandedChange={(expanded) =>
+                  onCommandOutputExpandedChange(workEntry, expanded)
+                }
+                showTerminalActions={status === "Running"}
+                terminalControlState={terminalControlState}
+                onOpenTerminal={onOpenTerminal}
+                onTakeOver={onTakeOverTerminal}
+                onHandBack={onHandBackTerminal}
+              />
+            );
+          }
+
+          if (
+            workEntry.requestKind === "file-read" ||
+            workEntry.itemType === "web_search" ||
+            workEntry.itemType === "mcp_tool_call" ||
+            workEntry.itemType === "dynamic_tool_call" ||
+            workEntry.itemType === "collab_agent_tool_call"
+          ) {
+            return <DraftActionStepRow key={entry.id} workEntry={workEntry} />;
+          }
+          const WorkIcon = resolveWorkIcon(workEntry);
+          const heading = resolveWorkHeading(workEntry);
+          const hasFileChangePanel = Boolean(workEntry.changedFiles && workEntry.changedFiles.length > 0);
+          const shouldShowInlineDetail =
+            Boolean(workEntry.detail) &&
+            !(workEntry.itemType === "file_change" && hasFileChangePanel);
+          return (
+            <div
+              key={entry.id}
+              className={`ml-7 rounded-xl border px-3 py-2 ${
+                workEntry.tone === "error"
+                  ? "border-destructive/40 bg-destructive/10"
+                  : "border-border bg-card/60"
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                <WorkIcon
+                  className={`mt-0.5 size-3.5 shrink-0 ${
+                    workEntry.tone === "error" ? "text-destructive" : "text-muted-foreground"
+                  }`}
+                />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="text-sm text-foreground">{heading}</p>
+                  {shouldShowInlineDetail ? (
+                    <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                      {workEntry.detail}
+                    </p>
+                  ) : null}
+                  {workEntry.command ? (
+                    <code className="block break-words font-mono text-xs text-muted-foreground">
+                      {sanitizeCommandLabelForDisplay(workEntry.command)}
+                    </code>
+                  ) : null}
+                  {hasFileChangePanel ? (
+                    <DraftFileChangesPanel workEntry={workEntry} />
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    ),
+    [
+      draftRenderables,
+      expandedCommandOutputByKey,
+      onCommandOutputExpandedChange,
+      onHandBackTerminal,
+      onOpenTerminal,
+      onRespondToApproval,
+      onTakeOverTerminal,
+      openInCwd,
+      openPlanSidebar,
+      respondingApprovalRequestIds,
+      terminalControlState,
+    ],
+  );
 
   return (
     <SidebarProvider
@@ -1948,7 +2851,8 @@ function DraftRouteView() {
       </Sidebar>
 
       <SidebarInset className="h-dvh min-h-0 overflow-hidden bg-background text-foreground">
-        <div className="flex h-full min-h-0 flex-col">
+        <div className="flex h-full min-h-0">
+          <div className="flex min-w-0 flex-1 flex-col">
           <header className="drag-region border-b border-border bg-card/95 px-3 py-1.5">
             <div className="flex h-9 min-w-0 items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-1.5">
@@ -2000,7 +2904,7 @@ function DraftRouteView() {
                     </MenuItem>
                     <MenuItem
                       onClick={() => {
-                        setPreferredThreadId(null);
+                        selectDraftThread(null);
                         addNotice("info", "Switched to latest active thread.");
                       }}
                     >
@@ -2014,15 +2918,6 @@ function DraftRouteView() {
                     </MenuItem>
                   </MenuPopup>
                 </Menu>
-                <span
-                  className={`rounded border px-2 py-1 ${
-                    unifiedInteractionBundleEnabled
-                      ? "border-success/40 bg-success/10 text-success"
-                      : "border-warning/40 bg-warning/10 text-warning"
-                  }`}
-                >
-                  interactions {unifiedInteractionBundleEnabled ? "on" : "off"}
-                </span>
 
                 <OpenInPicker
                   keybindings={keybindings}
@@ -2051,6 +2946,20 @@ function DraftRouteView() {
                 >
                   <RefreshCwIcon className="size-3.5" />
                 </Button>
+                {hasPlanSidebarContent || planSidebarOpen ? (
+                  <Button
+                    type="button"
+                    size="icon-xs"
+                    variant="outline"
+                    className={`border-border bg-background hover:bg-muted/60 ${
+                      planSidebarOpen ? "text-primary" : "text-muted-foreground"
+                    }`}
+                    title={planSidebarOpen ? "Hide plan sidebar" : "Show plan sidebar"}
+                    onClick={togglePlanSidebar}
+                  >
+                    <ListTodoIcon className="size-3.5" />
+                  </Button>
+                ) : null}
                 <Button
                   size="icon-xs"
                   variant="outline"
@@ -2085,10 +2994,26 @@ function DraftRouteView() {
 
               {notices.length > 0 ? (
                 <div className="mb-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Notices
+                    </p>
+                    {notices.length > 1 ? (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="ghost"
+                        className="h-6 px-2 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                        onClick={clearNotices}
+                      >
+                        Clear all
+                      </Button>
+                    ) : null}
+                  </div>
                   {notices.map((notice) => (
                     <div
                       key={notice.id}
-                      className={`rounded border px-3 py-2 text-xs ${
+                      className={`flex items-start gap-2 rounded border px-3 py-2 text-xs ${
                         notice.tone === "error"
                           ? "border-destructive/40 bg-destructive/10 text-destructive"
                           : notice.tone === "success"
@@ -2096,7 +3021,17 @@ function DraftRouteView() {
                             : "border-border bg-muted/40 text-foreground"
                       }`}
                     >
-                      {notice.text}
+                      <span className="min-w-0 flex-1">{notice.text}</span>
+                      <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="ghost"
+                        className="h-5 w-5 shrink-0 rounded-full p-0 text-current/70 hover:bg-muted/60 hover:text-current"
+                        aria-label="Dismiss notice"
+                        onClick={() => dismissNotice(notice.id)}
+                      >
+                        <XIcon className="size-3" />
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -2120,176 +3055,7 @@ function DraftRouteView() {
                     Thread is ready. Send a prompt to start a live run.
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {draftRenderables.map((renderable) => {
-                      if (renderable.renderKind === "terminal-run") {
-                        return <DraftInlineTerminalRunRow key={renderable.id} run={renderable.run} />;
-                      }
-                      if (renderable.kind === "pending-approval") {
-                        return (
-                          <DraftApprovalBlock
-                            key={renderable.id}
-                            approval={renderable.approval}
-                            isResponding={respondingApprovalRequestIds.includes(
-                              renderable.approval.requestId,
-                            )}
-                            onRespondToApproval={onRespondToApproval}
-                          />
-                        );
-                      }
-                      if (renderable.kind === "pending-input") {
-                        return <DraftPendingInputBlock key={renderable.id} input={renderable.input} />;
-                      }
-                      const entry = renderable.entry;
-                      if (entry.kind === "message") {
-                        if (entry.message.role === "user") {
-                          return (
-                            <div key={entry.id} className="space-y-2">
-                              <div className="flex items-start gap-2">
-                                <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-muted/40 text-foreground">
-                                  <UserIcon className="size-3" />
-                                </span>
-                                <p className="max-w-4xl whitespace-pre-wrap break-words font-medium text-foreground">
-                                  {stripDraftTerminalContextEnvelope(entry.message.text)}
-                                </p>
-                              </div>
-                              {entry.message.attachments && entry.message.attachments.length > 0 ? (
-                                <div className="ml-7 flex flex-wrap gap-2">
-                                  {entry.message.attachments.map((attachment) => (
-                                    <span
-                                      key={attachment.id}
-                                      className="rounded-md border border-border bg-muted/40 px-2 py-1 font-mono text-xs text-muted-foreground"
-                                    >
-                                      {attachment.name}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        }
-
-                        if (entry.message.role === "assistant") {
-                          const messageText =
-                            entry.message.text || (entry.message.streaming ? "" : "(empty response)");
-                          return (
-                            <div key={entry.id} className="ml-7 space-y-1">
-                              <div className="max-w-4xl text-[15px] leading-6 text-foreground">
-                                <ChatMarkdown
-                                  text={messageText}
-                                  cwd={openInCwd ?? undefined}
-                                  isStreaming={entry.message.streaming}
-                                />
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div
-                            key={entry.id}
-                            className="ml-7 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
-                          >
-                            {entry.message.text}
-                          </div>
-                        );
-                      }
-
-                      if (entry.kind === "proposed-plan") {
-                        return (
-                          <div
-                            key={entry.id}
-                            className="ml-7 rounded-xl border border-border bg-card/60 px-3 py-3"
-                          >
-                            <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-                              Proposed plan
-                            </p>
-                            <div className="text-sm text-foreground">
-                              <ChatMarkdown
-                                text={entry.proposedPlan.planMarkdown}
-                                cwd={openInCwd ?? undefined}
-                              />
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      const workEntry = entry.entry;
-                      if (isCommandWorkEntry(workEntry)) {
-                        const status = commandStatusLabel(workEntry);
-                        const commandText = workEntry.command?.trim() || workEntry.label;
-                        const commandLabel =
-                          workEntry.alwaysVisible && !commandText.startsWith("!")
-                            ? `! ${commandText}`
-                            : commandText;
-                        const stateKey = commandDropdownStateKey(workEntry);
-                        const isOutputExpanded = expandedCommandOutputByKey[stateKey] ?? false;
-                        return (
-                          <DraftCommandEntryRow
-                            key={entry.id}
-                            workEntry={workEntry}
-                            commandLabel={commandLabel}
-                            status={status}
-                            isOutputExpanded={isOutputExpanded}
-                            onOutputExpandedChange={(expanded) =>
-                              onCommandOutputExpandedChange(workEntry, expanded)
-                            }
-                            showTerminalActions={status === "Running"}
-                            terminalControlState={terminalControlState}
-                            onOpenTerminal={onOpenTerminal}
-                            onTakeOver={onTakeOverTerminal}
-                            onHandBack={onHandBackTerminal}
-                          />
-                        );
-                      }
-
-                      if (
-                        workEntry.requestKind === "file-read" ||
-                        workEntry.itemType === "web_search" ||
-                        workEntry.itemType === "mcp_tool_call" ||
-                        workEntry.itemType === "dynamic_tool_call" ||
-                        workEntry.itemType === "collab_agent_tool_call"
-                      ) {
-                        return <DraftActionStepRow key={entry.id} workEntry={workEntry} />;
-                      }
-                      const WorkIcon = resolveWorkIcon(workEntry);
-                      const heading = resolveWorkHeading(workEntry);
-                      return (
-                        <div
-                          key={entry.id}
-                          className={`ml-7 rounded-xl border px-3 py-2 ${
-                            workEntry.tone === "error"
-                              ? "border-destructive/40 bg-destructive/10"
-                              : "border-border bg-card/60"
-                          }`}
-                        >
-                          <div className="flex items-start gap-2">
-                            <WorkIcon
-                              className={`mt-0.5 size-3.5 shrink-0 ${
-                                workEntry.tone === "error" ? "text-destructive" : "text-muted-foreground"
-                              }`}
-                            />
-                            <div className="min-w-0 flex-1 space-y-1">
-                              <p className="text-sm text-foreground">{heading}</p>
-                              {workEntry.detail ? (
-                                <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
-                                  {workEntry.detail}
-                                </p>
-                              ) : null}
-                              {workEntry.command ? (
-                                <code className="block break-words font-mono text-xs text-muted-foreground">
-                                  {workEntry.command}
-                                </code>
-                              ) : null}
-                              {workEntry.changedFiles && workEntry.changedFiles.length > 0 ? (
-                                <DraftFileChangesPanel workEntry={workEntry} />
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  draftTimelineContent
                 )}
               </div>
 
@@ -2373,32 +3139,25 @@ function DraftRouteView() {
                   <PlusIcon className="size-3.5" />
                 </Button>
                 <label
-                  className={`flex h-11 flex-1 items-center rounded-lg border px-3 ${
+                  className={`flex min-h-11 flex-1 items-stretch rounded-lg border px-3 py-2 ${
                     resolvedIntentMode === "command"
                       ? "border-primary/45 bg-primary/5"
                       : "border-border bg-background"
                   }`}
                 >
-                  <input
-                    list={visibleSuggestions.length > 0 ? "draft-composer-suggestions" : undefined}
+                  <textarea
                     value={prompt}
                     onChange={(event) => onPromptChange(event.target.value)}
                     onKeyDown={onPromptKeyDown}
-                    className="w-full border-0 bg-transparent text-sm text-foreground outline-none"
+                    rows={2}
+                    className="max-h-[45vh] min-h-[3rem] w-full resize-y overflow-y-auto border-0 bg-transparent text-sm leading-5 text-foreground outline-none"
                     placeholder={
                       resolvedIntentMode === "command"
                         ? "! npm run test (Tab to accept suggestion)"
-                        : "Warp anything e.g. Set up Redis caching for my web application"
+                        : "Ask anything, e.g. set up Redis caching for my web application"
                     }
                   />
                 </label>
-                {visibleSuggestions.length > 0 ? (
-                  <datalist id="draft-composer-suggestions">
-                    {visibleSuggestions.map((suggestion) => (
-                      <option key={`suggestion:${suggestion}`} value={suggestion} />
-                    ))}
-                  </datalist>
-                ) : null}
                 <Button
                   type="submit"
                   size="sm"
@@ -2411,6 +3170,12 @@ function DraftRouteView() {
                   {sending ? "Sending..." : resolvedIntentMode === "command" ? "Run" : "Send"}
                 </Button>
               </div>
+              {visibleSuggestions.length > 0 ? (
+                <p className="pl-9 text-[11px] text-muted-foreground">
+                  Tab to autocomplete:{" "}
+                  <span className="font-mono text-foreground">{visibleSuggestions[0]}</span>
+                </p>
+              ) : null}
               <div className="flex items-center gap-2 overflow-x-auto text-[11px] text-muted-foreground [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <span className="max-w-[40%] truncate rounded border border-border bg-muted/40 px-2 py-1 font-mono text-foreground" title={cwdLabel}>
                   {cwdLabel}
@@ -2422,6 +3187,20 @@ function DraftRouteView() {
                   <span className="text-destructive">-{gitDeletions}</span>
                 </span>
                 <span className="rounded border border-border bg-muted/40 px-2 py-1">{contextUsageLabel}</span>
+                {codexAuthSourceIndicator ? (
+                  <span
+                    title={codexAuthSourceIndicator.description}
+                    className={`rounded border px-2 py-1 ${
+                      codexAuthSourceIndicator.tone === "success"
+                        ? "border-success/45 bg-success/10 text-success"
+                        : codexAuthSourceIndicator.tone === "warning"
+                          ? "border-amber-500/45 bg-amber-500/12 text-amber-700 dark:text-amber-300"
+                          : "border-border bg-muted/40 text-muted-foreground"
+                    }`}
+                  >
+                    {codexAuthSourceIndicator.label}
+                  </span>
+                ) : null}
                 <span className="rounded border border-border bg-muted/40 px-2 py-1">
                   {terminalControlState === "user-takeover"
                     ? "User takeover"
@@ -2454,29 +3233,24 @@ function DraftRouteView() {
                   </MenuPopup>
                 </Menu>
               </div>
-              {import.meta.env.DEV && qualityMetrics ? (
-                <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
-                  <p className="mb-1 uppercase tracking-wide text-foreground">Draft quality metrics</p>
-                  <div className="flex flex-wrap gap-3">
-                    <span>
-                      startup→ready{" "}
-                      {qualityMetrics.startupToReadyMs === null
-                        ? "n/a"
-                        : `${Math.round(qualityMetrics.startupToReadyMs)}ms`}
-                    </span>
-                    <span>
-                      first-command{" "}
-                      {qualityMetrics.firstCommandLatencyMs === null
-                        ? "n/a"
-                        : `${Math.round(qualityMetrics.firstCommandLatencyMs)}ms`}
-                    </span>
-                    <span>completed commands {qualityMetrics.commandCompletions}</span>
-                    <span>pending approvals {qualityMetrics.pendingApprovals}</span>
-                  </div>
-                </div>
-              ) : null}
             </form>
           </footer>
+          </div>
+          {planSidebarOpen ? (
+            <PlanSidebar
+              activePlan={activePlan}
+              activeProposedPlan={activeProposedPlan}
+              markdownCwd={openInCwd ?? undefined}
+              workspaceRoot={activeProject?.cwd ?? undefined}
+              timestampFormat={settings.timestampFormat}
+              onClose={() => {
+                setPlanSidebarOpen(false);
+                if (activePlanSidebarKey) {
+                  planSidebarDismissedForTurnRef.current = activePlanSidebarKey;
+                }
+              }}
+            />
+          ) : null}
         </div>
       </SidebarInset>
     </SidebarProvider>
@@ -2484,5 +3258,11 @@ function DraftRouteView() {
 }
 
 export const Route = createFileRoute("/draft")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    threadId:
+      typeof search.threadId === "string" && search.threadId.trim().length > 0
+        ? search.threadId
+        : undefined,
+  }),
   component: DraftRouteView,
 });

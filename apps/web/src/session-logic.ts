@@ -85,6 +85,7 @@ export interface WorkLogEntry {
   cwd?: string;
   exitCode?: number | null;
   changedFiles?: ReadonlyArray<string>;
+  fileDiffs?: ReadonlyArray<WorkLogFileDiff>;
   tone: "thinking" | "tool" | "info" | "error";
   toolTitle?: string;
   itemType?: ToolLifecycleItemType;
@@ -92,6 +93,10 @@ export interface WorkLogEntry {
   alwaysVisible?: boolean;
   itemId?: string;
   activityKind?: string;
+}
+export interface WorkLogFileDiff {
+  path: string;
+  diff: string;
 }
 
 export type ActiveThinkingContextKind =
@@ -924,7 +929,8 @@ export function deriveWorkLogEntries(
           : null;
       const alwaysVisible = isAlwaysVisibleWorkLogActivity(activity, payload);
       const command = extractToolCommand(payload);
-      const changedFiles = extractChangedFiles(payload);
+      const fileDiffs = extractStructuredFileDiffs(payload);
+      const changedFiles = extractChangedFiles(payload, fileDiffs);
       const title = extractToolTitle(payload);
       const itemType = extractWorkLogItemType(payload);
       const requestKind = extractWorkLogRequestKind(payload);
@@ -965,6 +971,9 @@ export function deriveWorkLogEntries(
       }
       if (changedFiles.length > 0) {
         entry.changedFiles = changedFiles;
+      }
+      if (fileDiffs.length > 0) {
+        entry.fileDiffs = fileDiffs;
       }
       if (title) {
         entry.toolTitle = title;
@@ -1083,6 +1092,110 @@ function normalizeWorkLogDetail(value: string | null): string | null {
   return stripTrailingExitCode(value).output;
 }
 
+function isLikelyUnifiedDiffText(value: string): boolean {
+  return (
+    /^diff --git /m.test(value) ||
+    /^@@ /m.test(value) ||
+    (/^---\s/m.test(value) && /^\+\+\+\s/m.test(value))
+  );
+}
+
+function extractUnifiedDiffText(value: unknown, depth = 0): string | null {
+  if (depth > 5) {
+    return null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 && isLikelyUnifiedDiffText(trimmed) ? trimmed : null;
+  }
+  if (Array.isArray(value)) {
+    let best: string | null = null;
+    for (const entry of value) {
+      const candidate = extractUnifiedDiffText(entry, depth + 1);
+      if (!candidate) {
+        continue;
+      }
+      if (!best || candidate.length > best.length) {
+        best = candidate;
+      }
+    }
+    return best;
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+  const nestedKeys = [
+    "unifiedDiff",
+    "diff",
+    "patch",
+    "patchText",
+    "content",
+    "output",
+    "text",
+    "stdout",
+    "stderr",
+    "result",
+    "item",
+    "data",
+    "changes",
+    "files",
+    "edits",
+    "operations",
+  ] as const;
+  let best: string | null = null;
+  for (const key of nestedKeys) {
+    if (!(key in record)) {
+      continue;
+    }
+    const candidate = extractUnifiedDiffText(record[key], depth + 1);
+    if (!candidate) {
+      continue;
+    }
+    if (!best || candidate.length > best.length) {
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+function extractFileChangeDiffDetail(payload: Record<string, unknown> | null): string | null {
+  const data = asRecord(payload?.data);
+  const item = asRecord(data?.item);
+  const result = asRecord(item?.result);
+  const candidates = [
+    extractUnifiedDiffText(result),
+    extractUnifiedDiffText(item),
+    extractUnifiedDiffText(data),
+    extractUnifiedDiffText(payload?.detail),
+    extractUnifiedDiffText(payload),
+  ];
+  return candidates.find((candidate) => candidate !== null) ?? null;
+}
+function extractStructuredFileDiffs(payload: Record<string, unknown> | null): WorkLogFileDiff[] {
+  const rawFileDiffs = payload?.fileDiffs;
+  if (!Array.isArray(rawFileDiffs)) {
+    return [];
+  }
+  const parsedFileDiffs: WorkLogFileDiff[] = [];
+  const seen = new Set<string>();
+  for (const rawFileDiff of rawFileDiffs) {
+    const fileDiffRecord = asRecord(rawFileDiff);
+    const path = asTrimmedString(fileDiffRecord?.path);
+    const diff = asTrimmedString(fileDiffRecord?.diff);
+    if (!path || !diff) {
+      continue;
+    }
+    const dedupeKey = `${path}\u0000${diff}`;
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+    parsedFileDiffs.push({ path, diff });
+  }
+  return parsedFileDiffs;
+}
+
 function extractCommandOutputDetail(payload: Record<string, unknown> | null): string | null {
   const data = asRecord(payload?.data);
   const item = asRecord(data?.item);
@@ -1113,11 +1226,17 @@ function extractWorkLogDetail(input: {
 }): string | null {
   const commandOutput =
     input.itemType === "command_execution" ? extractCommandOutputDetail(input.payload) : null;
+  const fileChangeDiffDetail =
+    input.itemType === "file_change" ? extractFileChangeDiffDetail(input.payload) : null;
   const payloadDetail =
     input.payload && typeof input.payload.detail === "string" && input.payload.detail.length > 0
       ? normalizeWorkLogDetail(input.payload.detail)
       : null;
-  const detail = commandOutput ?? payloadDetail;
+  const payloadMessageDetail =
+    input.payload && typeof input.payload.message === "string" && input.payload.message.length > 0
+      ? normalizeWorkLogDetail(input.payload.message)
+      : null;
+  const detail = commandOutput ?? fileChangeDiffDetail ?? payloadDetail ?? payloadMessageDetail;
   if (!detail) {
     return null;
   }
@@ -1255,9 +1374,15 @@ function collectChangedFiles(value: unknown, target: string[], seen: Set<string>
   }
 }
 
-function extractChangedFiles(payload: Record<string, unknown> | null): string[] {
+function extractChangedFiles(
+  payload: Record<string, unknown> | null,
+  structuredFileDiffs: ReadonlyArray<WorkLogFileDiff> = [],
+): string[] {
   const changedFiles: string[] = [];
   const seen = new Set<string>();
+  for (const fileDiff of structuredFileDiffs) {
+    pushChangedFile(changedFiles, seen, fileDiff.path);
+  }
   collectChangedFiles(asRecord(payload?.data), changedFiles, seen, 0);
   return changedFiles;
 }

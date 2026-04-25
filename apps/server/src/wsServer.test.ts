@@ -1453,10 +1453,10 @@ describe("WebSocket Server", () => {
 
     const response = await sendRequest(ws, WS_METHODS.shellOpenInEditor, {
       cwd: "/my/workspace",
-      editor: "cursor",
+      editor: "warp",
     });
     expect(response.error).toBeUndefined();
-    expect(openCalls).toEqual([{ cwd: path.resolve("/my/workspace"), editor: "cursor" }]);
+    expect(openCalls).toEqual([{ cwd: path.resolve("/my/workspace"), editor: "warp" }]);
   });
 
   it("allows shell.openInEditor for the keybindings config path", async () => {
@@ -1485,10 +1485,10 @@ describe("WebSocket Server", () => {
 
     const response = await sendRequest(ws, WS_METHODS.shellOpenInEditor, {
       cwd: keybindingsPath,
-      editor: "cursor",
+      editor: "warp",
     });
     expect(response.error).toBeUndefined();
-    expect(openCalls).toEqual([{ cwd: keybindingsPath, editor: "cursor" }]);
+    expect(openCalls).toEqual([{ cwd: keybindingsPath, editor: "warp" }]);
   });
 
   it("reads keybindings from the configured state directory", async () => {
@@ -2407,7 +2407,7 @@ describe("WebSocket Server", () => {
           body: {
             _tag: WS_METHODS.shellOpenInEditor,
             cwd: workspace,
-            editor: "cursor",
+            editor: "warp",
           },
         }),
       );

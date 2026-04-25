@@ -98,6 +98,12 @@ import {
   ServerOpenCodeStateInput,
   ServerUpsertKeybindingResult,
 } from "./server";
+import {
+  ToolEvent,
+  ToolsExecuteInput,
+  ToolsExecuteResult,
+  ToolsGetResultInput,
+} from "./tools";
 
 // ── WebSocket RPC Method Names ───────────────────────────────────────
 
@@ -148,6 +154,8 @@ export const WS_METHODS = {
   terminalRestart: "terminal.restart",
   terminalClose: "terminal.close",
   terminalExec: "terminal.exec",
+  toolsExecute: "tools.execute",
+  toolsGetResult: "tools.getResult",
 
   // Server meta
   serverGetConfig: "server.getConfig",
@@ -164,6 +172,7 @@ export const WS_METHODS = {
 export const WS_CHANNELS = {
   terminalEvent: "terminal.event",
   terminalExecEvent: "terminal.execEvent",
+  toolsEvent: "tools.event",
   serverWelcome: "server.welcome",
   serverConfigUpdated: "server.configUpdated",
 } as const;
@@ -234,6 +243,8 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.terminalRestart, TerminalRestartInput),
   tagRequestBody(WS_METHODS.terminalClose, TerminalCloseInput),
   tagRequestBody(WS_METHODS.terminalExec, TerminalExecInput),
+  tagRequestBody(WS_METHODS.toolsExecute, ToolsExecuteInput),
+  tagRequestBody(WS_METHODS.toolsGetResult, ToolsGetResultInput),
 
   // Server meta
   tagRequestBody(WS_METHODS.serverGetConfig, Schema.Struct({})),
@@ -278,6 +289,7 @@ export interface WsPushPayloadByChannel {
   readonly [WS_CHANNELS.serverConfigUpdated]: typeof ServerConfigUpdatedPayload.Type;
   readonly [WS_CHANNELS.terminalEvent]: typeof TerminalEvent.Type;
   readonly [WS_CHANNELS.terminalExecEvent]: typeof TerminalExecEvent.Type;
+  readonly [WS_CHANNELS.toolsEvent]: typeof ToolEvent.Type;
   readonly [ORCHESTRATION_WS_CHANNELS.domainEvent]: OrchestrationEvent;
 }
 
@@ -305,6 +317,7 @@ export const WsPushTerminalExecEvent = makeWsPushSchema(
   WS_CHANNELS.terminalExecEvent,
   TerminalExecEvent,
 );
+export const WsPushToolsEvent = makeWsPushSchema(WS_CHANNELS.toolsEvent, ToolEvent);
 export const WsPushOrchestrationDomainEvent = makeWsPushSchema(
   ORCHESTRATION_WS_CHANNELS.domainEvent,
   OrchestrationEvent,
@@ -315,6 +328,7 @@ export const WsPushChannelSchema = Schema.Literals([
   WS_CHANNELS.serverConfigUpdated,
   WS_CHANNELS.terminalEvent,
   WS_CHANNELS.terminalExecEvent,
+  WS_CHANNELS.toolsEvent,
   ORCHESTRATION_WS_CHANNELS.domainEvent,
 ]);
 export type WsPushChannelSchema = typeof WsPushChannelSchema.Type;
@@ -324,6 +338,7 @@ export const WsPush = Schema.Union([
   WsPushServerConfigUpdated,
   WsPushTerminalEvent,
   WsPushTerminalExecEvent,
+  WsPushToolsEvent,
   WsPushOrchestrationDomainEvent,
 ]);
 export type WsPush = typeof WsPush.Type;
@@ -383,6 +398,8 @@ export const WsRpcResultSchemaByMethod = {
   [WS_METHODS.terminalRestart]: TerminalSessionSnapshot,
   [WS_METHODS.terminalClose]: Schema.Void,
   [WS_METHODS.terminalExec]: TerminalExecResult,
+  [WS_METHODS.toolsExecute]: ToolsExecuteResult,
+  [WS_METHODS.toolsGetResult]: ToolsExecuteResult,
   [WS_METHODS.serverGetConfig]: ServerConfig,
   [WS_METHODS.serverGetCopilotUsage]: ServerCopilotUsage,
   [WS_METHODS.serverProbeCopilotReasoning]: ServerCopilotReasoningProbe,

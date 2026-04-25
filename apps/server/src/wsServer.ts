@@ -40,6 +40,7 @@ import {
   type TerminalExecEvent,
   type TerminalEvent,
   type TerminalOpenInput,
+  type ToolsExecuteInput,
 } from "@draft/contracts";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import {
@@ -105,6 +106,7 @@ import {
 } from "./attachmentStore.ts";
 import { parseBase64DataUrl } from "./imageMime.ts";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService.ts";
+import { ToolExecutor } from "./tools/Services/ToolExecutor.ts";
 import { expandHomePath } from "./os-jank.ts";
 import { createCopilotUsageReader } from "./copilotUsage.ts";
 import { CopilotAcpManager, readCopilotReasoningEffortSelector } from "./copilotAcpManager.ts";
@@ -376,6 +378,7 @@ export type ServerRuntimeServices =
   | GitCore
   | TerminalManager
   | TerminalCommandRunner
+  | ToolExecutor
   | Keybindings
   | Open
   | AnalyticsService;
@@ -450,6 +453,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const gitManager = yield* GitManager;
   const terminalManager = yield* TerminalManager;
   const terminalCommandRunner = yield* TerminalCommandRunner;
+  const toolExecutor = yield* ToolExecutor;
   const keybindingsManager = yield* Keybindings;
   const providerService = yield* ProviderService;
   const providerHealth = yield* ProviderHealth;
@@ -1384,8 +1388,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       });
     },
   );
+  const unsubscribeToolEvents = yield* toolExecutor.subscribe((event) => {
+    void runPromise(pushBus.publishAll(WS_CHANNELS.toolsEvent, event)).catch((error) => {
+      logger.error("failed to publish tool event", {
+        toolEventType: event.type,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  });
   yield* Effect.addFinalizer(() => Effect.sync(() => unsubscribeTerminalEvents()));
   yield* Effect.addFinalizer(() => Effect.sync(() => unsubscribeTerminalExecEvents()));
+  yield* Effect.addFinalizer(() => Effect.sync(() => unsubscribeToolEvents()));
   yield* readiness.markTerminalSubscriptionsReady;
 
   yield* NodeHttpServer.make(() => httpServer, listenOptions).pipe(
@@ -2017,6 +2030,20 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           }),
         } satisfies TerminalExecInput;
         return yield* terminalCommandRunner.exec(normalizedInput);
+      }
+
+      case WS_METHODS.toolsExecute: {
+        const body = stripRequestTag(request.body);
+        const normalizedInput = {
+          ...body,
+          invocations: body.invocations.map((invocation) => invocation),
+        } satisfies ToolsExecuteInput;
+        return yield* toolExecutor.execute(normalizedInput);
+      }
+
+      case WS_METHODS.toolsGetResult: {
+        const body = stripRequestTag(request.body);
+        return yield* toolExecutor.getResult(body);
       }
 
       case WS_METHODS.terminalWrite: {

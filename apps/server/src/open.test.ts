@@ -22,12 +22,12 @@ it.layer(NodeServices.layer)("resolveEditorLaunch", (it) => {
         args: ["/tmp/workspace"],
       });
 
-      const cursorLaunch = yield* resolveEditorLaunch(
-        { cwd: "/tmp/workspace", editor: "cursor" },
+      const warpLaunch = yield* resolveEditorLaunch(
+        { cwd: "/tmp/workspace", editor: "warp" },
         "darwin",
       );
-      assert.deepEqual(cursorLaunch, {
-        command: "cursor",
+      assert.deepEqual(warpLaunch, {
+        command: "warp",
         args: ["/tmp/workspace"],
       });
 
@@ -57,26 +57,35 @@ it.layer(NodeServices.layer)("resolveEditorLaunch", (it) => {
         command: "zed",
         args: ["/tmp/workspace"],
       });
+
+      const sublimeLaunch = yield* resolveEditorLaunch(
+        { cwd: "/tmp/workspace", editor: "sublime" },
+        "darwin",
+      );
+      assert.deepEqual(sublimeLaunch, {
+        command: "subl",
+        args: ["/tmp/workspace"],
+      });
     }),
   );
 
   it.effect("uses --goto when editor supports line/column suffixes", () =>
     Effect.gen(function* () {
       const lineOnly = yield* resolveEditorLaunch(
-        { cwd: "/tmp/workspace/AGENTS.md:48", editor: "cursor" },
+        { cwd: "/tmp/workspace/AGENTS.md:48", editor: "warp" },
         "darwin",
       );
       assert.deepEqual(lineOnly, {
-        command: "cursor",
+        command: "warp",
         args: ["--goto", "/tmp/workspace/AGENTS.md:48"],
       });
 
       const lineAndColumn = yield* resolveEditorLaunch(
-        { cwd: "/tmp/workspace/src/open.ts:71:5", editor: "cursor" },
+        { cwd: "/tmp/workspace/src/open.ts:71:5", editor: "warp" },
         "darwin",
       );
       assert.deepEqual(lineAndColumn, {
-        command: "cursor",
+        command: "warp",
         args: ["--goto", "/tmp/workspace/src/open.ts:71:5"],
       });
 
@@ -238,14 +247,30 @@ it.layer(NodeServices.layer)("resolveAvailableEditors", (it) => {
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-editors-" });
 
-      yield* fs.writeFileString(path.join(dir, "cursor.CMD"), "@echo off\r\n");
+      yield* fs.writeFileString(path.join(dir, "warp.CMD"), "@echo off\r\n");
+      yield* fs.writeFileString(path.join(dir, "subl.CMD"), "@echo off\r\n");
       yield* fs.writeFileString(path.join(dir, "code-insiders.CMD"), "@echo off\r\n");
       yield* fs.writeFileString(path.join(dir, "explorer.CMD"), "MZ");
       const editors = resolveAvailableEditors("win32", {
         PATH: dir,
         PATHEXT: ".COM;.EXE;.BAT;.CMD",
       });
-      assert.deepEqual(editors, ["cursor", "vscode-insiders", "file-manager"]);
+      assert.deepEqual(editors, ["warp", "vscode-insiders", "sublime", "file-manager"]);
+    }),
+  );
+
+  it.effect("detects sublime editor on win32 when only sublime_text command exists", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
+      yield* fs.writeFileString(path.join(dir, "sublime_text.CMD"), "@echo off\r\n");
+      const editors = resolveAvailableEditors("win32", {
+        PATH: dir,
+        PATHEXT: ".COM;.EXE;.BAT;.CMD",
+      });
+      assert.deepEqual(editors, ["sublime"]);
     }),
   );
 });

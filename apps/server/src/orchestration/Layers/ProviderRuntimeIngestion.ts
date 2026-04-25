@@ -105,6 +105,10 @@ function proposedPlanIdFromEvent(event: ProviderRuntimeEvent, threadId: ThreadId
 function asString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
+function asTrimmedString(value: unknown): string | undefined {
+  const direct = asString(value)?.trim();
+  return direct && direct.length > 0 ? direct : undefined;
+}
 function normalizeCommandValue(value: unknown): string | undefined {
   const direct = asString(value)?.trim();
   if (direct && direct.length > 0) {
@@ -123,6 +127,298 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     return undefined;
   }
   return value as Record<string, unknown>;
+}
+interface RuntimeFileChangeDiffSlice {
+  path: string;
+  diff: string;
+}
+function normalizeDiffPath(path: string): string {
+  const trimmed = path.trim();
+  if (trimmed.startsWith("a/") || trimmed.startsWith("b/")) {
+    return trimmed.slice(2);
+  }
+  return trimmed;
+}
+function normalizeDiffPathForComparison(path: string): string {
+  return normalizeDiffPath(path)
+    .replace(/\\/g, "/")
+    .replace(/^[a-z]:\//i, "")
+    .replace(/^\/+/, "")
+    .replace(/^\.\/+/, "")
+    .toLowerCase();
+}
+function diffPathMatchScore(leftPath: string, rightPath: string): number {
+  if (leftPath.length === 0 || rightPath.length === 0) {
+    return -1;
+  }
+  if (leftPath === rightPath) {
+    return Math.max(leftPath.length, rightPath.length) + 1000;
+  }
+  if (leftPath.endsWith(`/${rightPath}`)) {
+    return rightPath.length;
+  }
+  if (rightPath.endsWith(`/${leftPath}`)) {
+    return leftPath.length;
+  }
+  return -1;
+}
+function isLikelyUnifiedDiffText(value: string): boolean {
+  return (
+    /^diff --git /m.test(value) ||
+    /^@@ /m.test(value) ||
+    (/^---\s/m.test(value) && /^\+\+\+\s/m.test(value))
+  );
+}
+function isLikelyUnifiedHunkOnlyText(value: string): boolean {
+  return (
+    /^@@ /m.test(value) &&
+    !/^diff --git /m.test(value) &&
+    !/^--- a\//m.test(value) &&
+    !/^\+\+\+ b\//m.test(value)
+  );
+}
+function extractUnifiedDiffText(value: unknown, depth = 0): string | undefined {
+  if (depth > 5) {
+    return undefined;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 && isLikelyUnifiedDiffText(trimmed) ? trimmed : undefined;
+  }
+  if (Array.isArray(value)) {
+    let best: string | undefined;
+    for (const entry of value) {
+      const candidate = extractUnifiedDiffText(entry, depth + 1);
+      if (!candidate) {
+        continue;
+      }
+      if (!best || candidate.length > best.length) {
+        best = candidate;
+      }
+    }
+    return best;
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return undefined;
+  }
+  const nestedKeys = [
+    "unifiedDiff",
+    "diff",
+    "patch",
+    "patchText",
+    "content",
+    "output",
+    "text",
+    "stdout",
+    "stderr",
+    "result",
+    "item",
+    "data",
+    "changes",
+    "files",
+    "edits",
+    "operations",
+  ] as const;
+  let best: string | undefined;
+  for (const key of nestedKeys) {
+    if (!(key in record)) {
+      continue;
+    }
+    const candidate = extractUnifiedDiffText(record[key], depth + 1);
+    if (!candidate) {
+      continue;
+    }
+    if (!best || candidate.length > best.length) {
+      best = candidate;
+    }
+  }
+  return best;
+}
+function extractDiffPath(diffBlock: string): string | undefined {
+  const diffHeaderMatch = /^diff --git a\/(.+?) b\/(.+)$/m.exec(diffBlock);
+  if (diffHeaderMatch?.[2]) {
+    return normalizeDiffPath(diffHeaderMatch[2]);
+  }
+  const nextFileMatch = /^\+\+\+ b\/(.+)$/m.exec(diffBlock);
+  if (nextFileMatch?.[1]) {
+    return normalizeDiffPath(nextFileMatch[1]);
+  }
+  const oldFileMatch = /^--- a\/(.+)$/m.exec(diffBlock);
+  if (oldFileMatch?.[1]) {
+    return normalizeDiffPath(oldFileMatch[1]);
+  }
+  return undefined;
+}
+function splitUnifiedDiffByFile(text: string): RuntimeFileChangeDiffSlice[] {
+  const blocks = text
+    .split(/^diff --git /m)
+    .map((block, index) => (index === 0 ? block : `diff --git ${block}`))
+    .filter((block) => block.trim().length > 0 && block.trimStart().startsWith("diff --git "));
+  return blocks
+    .map((block) => {
+      const path = extractDiffPath(block);
+      if (!path) {
+        return undefined;
+      }
+      return {
+        path,
+        diff: block.trimEnd(),
+      } satisfies RuntimeFileChangeDiffSlice;
+    })
+    .filter((entry): entry is RuntimeFileChangeDiffSlice => entry !== undefined);
+}
+function pushChangedFilePath(target: string[], seen: Set<string>, value: unknown) {
+  const normalized = asTrimmedString(value);
+  if (!normalized || seen.has(normalized)) {
+    return;
+  }
+  seen.add(normalized);
+  target.push(normalized);
+}
+function collectChangedFilePaths(
+  value: unknown,
+  target: string[],
+  seen: Set<string>,
+  depth: number,
+) {
+  if (depth > 4 || target.length >= 16) {
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      collectChangedFilePaths(entry, target, seen, depth + 1);
+      if (target.length >= 16) {
+        return;
+      }
+    }
+    return;
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return;
+  }
+  pushChangedFilePath(target, seen, record.path);
+  pushChangedFilePath(target, seen, record.filePath);
+  pushChangedFilePath(target, seen, record.relativePath);
+  pushChangedFilePath(target, seen, record.filename);
+  pushChangedFilePath(target, seen, record.newPath);
+  pushChangedFilePath(target, seen, record.oldPath);
+  for (const nestedKey of [
+    "item",
+    "result",
+    "input",
+    "data",
+    "changes",
+    "files",
+    "edits",
+    "patch",
+    "patches",
+    "operations",
+  ]) {
+    if (!(nestedKey in record)) {
+      continue;
+    }
+    collectChangedFilePaths(record[nestedKey], target, seen, depth + 1);
+    if (target.length >= 16) {
+      return;
+    }
+  }
+}
+function extractChangedFilePathsFromPayload(payloadData: unknown): string[] {
+  const changedFiles: string[] = [];
+  const seen = new Set<string>();
+  collectChangedFilePaths(payloadData, changedFiles, seen, 0);
+  return changedFiles;
+}
+function findBestMatchingDiffSlice(input: {
+  changedFilePath: string;
+  diffSlicesByPath: ReadonlyMap<string, RuntimeFileChangeDiffSlice>;
+  consumedNormalizedPaths: ReadonlySet<string>;
+}): { normalizedPath: string; diffSlice: RuntimeFileChangeDiffSlice } | undefined {
+  const normalizedChangedPath = normalizeDiffPathForComparison(input.changedFilePath);
+  let bestMatch: { normalizedPath: string; diffSlice: RuntimeFileChangeDiffSlice } | undefined;
+  let bestScore = -1;
+  for (const [normalizedPath, diffSlice] of input.diffSlicesByPath.entries()) {
+    if (input.consumedNormalizedPaths.has(normalizedPath)) {
+      continue;
+    }
+    const score = diffPathMatchScore(normalizedChangedPath, normalizedPath);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = { normalizedPath, diffSlice };
+    }
+  }
+  return bestScore >= 0 ? bestMatch : undefined;
+}
+function structuredFileDiffsFromLifecyclePayload(
+  payload: Extract<
+    ProviderRuntimeEvent,
+    { type: "item.started" | "item.updated" | "item.completed" }
+  >["payload"],
+): ReadonlyArray<RuntimeFileChangeDiffSlice> | undefined {
+  if (payload.itemType !== "file_change") {
+    return undefined;
+  }
+  const changedFiles = extractChangedFilePathsFromPayload(payload.data);
+  const diffText = extractUnifiedDiffText(payload.data) ?? extractUnifiedDiffText(payload.detail);
+  if (!diffText) {
+    return undefined;
+  }
+  const splitByFile = splitUnifiedDiffByFile(diffText);
+  if (splitByFile.length === 0) {
+    if (changedFiles.length === 0) {
+      return undefined;
+    }
+    if (isLikelyUnifiedHunkOnlyText(diffText)) {
+      return changedFiles.map((path) => ({
+        path,
+        diff: diffText,
+      }));
+    }
+    return changedFiles.map((path) => ({
+      path,
+      diff: diffText,
+    }));
+  }
+  if (changedFiles.length === 0) {
+    return splitByFile;
+  }
+  const diffSliceByNormalizedPath = new Map<string, RuntimeFileChangeDiffSlice>();
+  for (const diffSlice of splitByFile) {
+    const normalizedPath = normalizeDiffPathForComparison(diffSlice.path);
+    if (!diffSliceByNormalizedPath.has(normalizedPath)) {
+      diffSliceByNormalizedPath.set(normalizedPath, diffSlice);
+    }
+  }
+  const structuredSlices: RuntimeFileChangeDiffSlice[] = [];
+  const consumedNormalizedPaths = new Set<string>();
+  for (const changedFilePath of changedFiles) {
+    const matchedDiffSlice = findBestMatchingDiffSlice({
+      changedFilePath,
+      diffSlicesByPath: diffSliceByNormalizedPath,
+      consumedNormalizedPaths,
+    });
+    if (matchedDiffSlice) {
+      consumedNormalizedPaths.add(matchedDiffSlice.normalizedPath);
+      structuredSlices.push({
+        path: changedFilePath,
+        diff: matchedDiffSlice.diffSlice.diff,
+      });
+      continue;
+    }
+    structuredSlices.push({
+      path: changedFilePath,
+      diff: diffText,
+    });
+  }
+  for (const [normalizedPath, diffSlice] of diffSliceByNormalizedPath.entries()) {
+    if (consumedNormalizedPaths.has(normalizedPath)) {
+      continue;
+    }
+    structuredSlices.push(diffSlice);
+  }
+  return structuredSlices.length > 0 ? structuredSlices : undefined;
 }
 
 function runtimePayloadRecord(event: ProviderRuntimeEvent): Record<string, unknown> | undefined {
@@ -419,6 +715,7 @@ function runtimeEventToActivities(
       if (!message) {
         return [];
       }
+      const detail = truncateDetail(message);
       return [
         {
           id: event.eventId,
@@ -427,7 +724,9 @@ function runtimeEventToActivities(
           kind: "runtime.error",
           summary: "Runtime error",
           payload: {
-            message: truncateDetail(message),
+            message: detail,
+            detail,
+            ...(event.itemId ? { itemId: String(event.itemId) } : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -622,6 +921,7 @@ function runtimeEventToActivities(
       if (!isToolLifecycleItemType(event.payload.itemType)) {
         return [];
       }
+      const fileDiffs = structuredFileDiffsFromLifecyclePayload(event.payload);
       return [
         {
           id: event.eventId,
@@ -635,6 +935,7 @@ function runtimeEventToActivities(
             ...(event.payload.status ? { status: event.payload.status } : {}),
             ...(event.payload.detail ? { detail: event.payload.detail } : {}),
             ...(event.payload.data !== undefined ? { data: event.payload.data } : {}),
+            ...(fileDiffs ? { fileDiffs } : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -646,6 +947,7 @@ function runtimeEventToActivities(
       if (!isToolLifecycleItemType(event.payload.itemType)) {
         return [];
       }
+      const fileDiffs = structuredFileDiffsFromLifecyclePayload(event.payload);
       return [
         {
           id: event.eventId,
@@ -659,6 +961,7 @@ function runtimeEventToActivities(
             ...(event.payload.status ? { status: event.payload.status } : {}),
             ...(event.payload.detail ? { detail: event.payload.detail } : {}),
             ...(event.payload.data !== undefined ? { data: event.payload.data } : {}),
+            ...(fileDiffs ? { fileDiffs } : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -670,6 +973,7 @@ function runtimeEventToActivities(
       if (!isToolLifecycleItemType(event.payload.itemType)) {
         return [];
       }
+      const fileDiffs = structuredFileDiffsFromLifecyclePayload(event.payload);
       return [
         {
           id: event.eventId,
@@ -683,6 +987,7 @@ function runtimeEventToActivities(
             ...(event.payload.status ? { status: event.payload.status } : {}),
             ...(event.payload.detail ? { detail: event.payload.detail } : {}),
             ...(event.payload.data !== undefined ? { data: event.payload.data } : {}),
+            ...(fileDiffs ? { fileDiffs } : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,

@@ -1,5 +1,5 @@
 import { DEFAULT_RUNTIME_MODE, ProjectId, ThreadId } from "@draft/contracts";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
 
 import { type DraftThreadEnvMode, useComposerDraftStore } from "../composerDraftStore";
@@ -26,10 +26,16 @@ export function useNewThreadActions() {
     (store) => store.clearProjectDraftThreadId,
   );
   const navigate = useNavigate();
-  const routeThreadId = useParams({
+  const routeThreadIdFromParams = useParams({
     strict: false,
     select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
   });
+  const routeThreadIdFromSearch = useSearch({
+    strict: false,
+    select: (search) =>
+      typeof search.threadId === "string" ? ThreadId.makeUnsafe(search.threadId) : null,
+  });
+  const routeThreadId = routeThreadIdFromParams ?? routeThreadIdFromSearch;
   const activeThread = useMemo(
     () => (routeThreadId ? threads.find((thread) => thread.id === routeThreadId) : undefined),
     [routeThreadId, threads],
@@ -52,8 +58,8 @@ export function useNewThreadActions() {
             return;
           }
           await navigate({
-            to: "/$threadId",
-            params: { threadId: storedDraftThread.threadId },
+            to: "/draft",
+            search: { threadId: storedDraftThread.threadId },
           });
         })();
       }
@@ -81,8 +87,8 @@ export function useNewThreadActions() {
         });
 
         await navigate({
-          to: "/$threadId",
-          params: { threadId: nextThreadId },
+          to: "/draft",
+          search: { threadId: nextThreadId },
         });
       })();
     },

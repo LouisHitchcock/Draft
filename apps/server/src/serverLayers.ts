@@ -42,6 +42,9 @@ import { GitServiceLive } from "./git/Layers/GitService";
 import { BunPtyAdapterLive } from "./terminal/Layers/BunPTY";
 import { NodePtyAdapterLive } from "./terminal/Layers/NodePTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
+import { ToolPolicyEngineLive } from "./tools/Layers/ToolPolicyEngine";
+import { ToolRegistryLive } from "./tools/Layers/ToolRegistry";
+import { ToolExecutorLive } from "./tools/Layers/ToolExecutor";
 
 const ENABLE_PROVIDER_EVENT_LOGS_ENV = "DRAFT_ENABLE_PROVIDER_EVENT_LOGS";
 const LEGACY_ENABLE_PROVIDER_EVENT_LOGS_ENV = `CUT${3}_ENABLE_PROVIDER_EVENT_LOGS`;
@@ -153,6 +156,12 @@ export function makeServerRuntimeServicesLayer() {
     ),
   );
   const terminalLayer = TerminalCommandRunnerLive.pipe(Layer.provideMerge(terminalManagerLayer));
+  const toolPolicyLayer = ToolPolicyEngineLive;
+  const toolRegistryLayer = ToolRegistryLive.pipe(Layer.provideMerge(terminalLayer));
+  const toolExecutorLayer = ToolExecutorLive.pipe(
+    Layer.provideMerge(toolRegistryLayer),
+    Layer.provideMerge(toolPolicyLayer),
+  );
 
   const gitManagerLayer = GitManagerLive.pipe(
     Layer.provideMerge(gitCoreLayer),
@@ -165,6 +174,7 @@ export function makeServerRuntimeServicesLayer() {
     gitCoreLayer,
     gitManagerLayer,
     terminalLayer,
+    toolExecutorLayer,
     OpenCodeStateLive,
     KeybindingsLive,
   ).pipe(Layer.provideMerge(NodeServices.layer));

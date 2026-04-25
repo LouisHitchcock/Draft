@@ -41,7 +41,7 @@ const LINE_COLUMN_SUFFIX_PATTERN = /:\d+(?::\d+)?$/;
 
 function shouldUseGotoFlag(editorId: EditorId, target: string): boolean {
   return (
-    (editorId === "cursor" || editorId === "vscode" || editorId === "vscode-insiders") &&
+    (editorId === "warp" || editorId === "vscode" || editorId === "vscode-insiders") &&
     LINE_COLUMN_SUFFIX_PATTERN.test(target)
   );
 }
@@ -130,6 +130,20 @@ function resolvePathDelimiter(platform: NodeJS.Platform): string {
   return platform === "win32" ? ";" : ":";
 }
 
+function resolveEditorCommandCandidates(
+  editorId: EditorId,
+  defaultCommand: string,
+  platform: NodeJS.Platform,
+): ReadonlyArray<string> {
+  if (editorId === "sublime") {
+    if (platform === "win32") {
+      return ["subl", "sublime_text"];
+    }
+    return ["subl"];
+  }
+  return [defaultCommand];
+}
+
 export function isCommandAvailable(
   command: string,
   options: CommandAvailabilityOptions = {},
@@ -169,8 +183,10 @@ export function resolveAvailableEditors(
   const available: EditorId[] = [];
 
   for (const editor of EDITORS) {
-    const command = editor.command ?? fileManagerCommandForPlatform(platform);
-    if (isCommandAvailable(command, { platform, env })) {
+    const commands = editor.command
+      ? resolveEditorCommandCandidates(editor.id, editor.command, platform)
+      : [fileManagerCommandForPlatform(platform)];
+    if (commands.some((command) => isCommandAvailable(command, { platform, env }))) {
       available.push(editor.id);
     }
   }
@@ -214,9 +230,20 @@ export const resolveEditorLaunch = Effect.fnUntraced(function* (
   }
 
   if (editorDef.command) {
+    const commandCandidates = resolveEditorCommandCandidates(
+      editorDef.id,
+      editorDef.command,
+      platform,
+    );
+    const command =
+      commandCandidates.find((candidate) => isCommandAvailable(candidate, { platform })) ??
+      commandCandidates[0];
+    if (!command) {
+      return yield* new OpenError({ message: `Unsupported editor: ${input.editor}` });
+    }
     return shouldUseGotoFlag(editorDef.id, input.cwd)
-      ? { command: editorDef.command, args: ["--goto", input.cwd] }
-      : { command: editorDef.command, args: [input.cwd] };
+      ? { command, args: ["--goto", input.cwd] }
+      : { command, args: [input.cwd] };
   }
 
   if (editorDef.id !== "file-manager") {

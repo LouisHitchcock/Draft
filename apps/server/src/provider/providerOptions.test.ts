@@ -15,6 +15,7 @@ describe("sanitizeProviderOptionsForPersistence", () => {
         codex: {
           binaryPath: "/tmp/codex",
           homePath: "/tmp/.codex",
+          openAiApiKey: "**************",
           openRouterApiKey: "sk-or-secret",
         },
       }),
@@ -49,6 +50,7 @@ describe("sanitizeProviderOptionsRecordForPersistence", () => {
         codex: {
           binaryPath: "/tmp/codex",
           homePath: "/tmp/.codex",
+          openAiApiKey: "**************",
           openRouterApiKey: "sk-or-secret",
         },
       }),
@@ -81,6 +83,7 @@ describe("provider secret requirements", () => {
     expect(
       deriveProviderSecretRequirements({
         codex: {
+          openAiApiKey: "**************",
           openRouterApiKey: "sk-or-secret",
         },
         kimi: {
@@ -89,6 +92,7 @@ describe("provider secret requirements", () => {
       }),
     ).toEqual({
       codex: {
+        openAiApiKey: true,
         openRouterApiKey: true,
       },
       kimi: {
@@ -101,6 +105,7 @@ describe("provider secret requirements", () => {
     expect(
       sanitizeProviderSecretRequirementsRecord({
         codex: {
+          openAiApiKey: true,
           openRouterApiKey: true,
           leaked: "nope",
         },
@@ -110,6 +115,7 @@ describe("provider secret requirements", () => {
       }),
     ).toEqual({
       codex: {
+        openAiApiKey: true,
         openRouterApiKey: true,
       },
       kimi: {
@@ -131,6 +137,7 @@ describe("provider secret requirements", () => {
         },
         secretRequirements: {
           codex: {
+            openAiApiKey: true,
             openRouterApiKey: true,
           },
           kimi: {
@@ -138,6 +145,7 @@ describe("provider secret requirements", () => {
           },
         },
         env: {
+          OPENAI_API_KEY: "**************",
           OPENROUTER_API_KEY: "sk-or-fresh",
           KIMI_API_KEY: "sk-kimi-fresh",
         },
@@ -146,6 +154,7 @@ describe("provider secret requirements", () => {
       providerOptions: {
         codex: {
           binaryPath: "/tmp/codex",
+          openAiApiKey: "**************",
           openRouterApiKey: "sk-or-fresh",
         },
         kimi: {

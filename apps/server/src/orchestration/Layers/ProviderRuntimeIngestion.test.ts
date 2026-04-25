@@ -1291,6 +1291,7 @@ describe("ProviderRuntimeIngestion", () => {
       createdAt: now,
       threadId: asThreadId("thread-1"),
       turnId: asTurnId("turn-3"),
+      itemId: asItemId("item-runtime-error"),
       payload: {
         message: "runtime exploded",
       },
@@ -1305,6 +1306,18 @@ describe("ProviderRuntimeIngestion", () => {
     );
     expect(thread.session?.status).toBe("error");
     expect(thread.session?.lastError).toBe("runtime exploded");
+    const runtimeErrorActivity = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) => activity.id === "evt-runtime-error",
+    );
+    const runtimeErrorPayload =
+      runtimeErrorActivity?.payload && typeof runtimeErrorActivity.payload === "object"
+        ? (runtimeErrorActivity.payload as Record<string, unknown>)
+        : undefined;
+    expect(runtimeErrorPayload).toMatchObject({
+      message: "runtime exploded",
+      detail: "runtime exploded",
+      itemId: "item-runtime-error",
+    });
   });
 
   it("maps session.exited error reasons into stopped session state", async () => {
@@ -1494,6 +1507,135 @@ describe("ProviderRuntimeIngestion", () => {
         (activity: ProviderRuntimeTestActivity) => activity.kind === "tool.started",
       ),
     ).toBe(true);
+  });
+
+  it("derives structured fileDiffs for file_change activities from multi-file unified diff text", async () => {
+    const harness = await createHarness();
+    const now = new Date().toISOString();
+    const multiFileDiff = [
+      "diff --git a/apps/web/src/a.ts b/apps/web/src/a.ts",
+      "--- a/apps/web/src/a.ts",
+      "+++ b/apps/web/src/a.ts",
+      "@@ -1,1 +1,1 @@",
+      "-old-a",
+      "+new-a",
+      "diff --git a/apps/web/src/b.ts b/apps/web/src/b.ts",
+      "--- a/apps/web/src/b.ts",
+      "+++ b/apps/web/src/b.ts",
+      "@@ -1,1 +1,1 @@",
+      "-old-b",
+      "+new-b",
+    ].join("\n");
+
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-file-change-structured"),
+      provider: "codex",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-file-change-structured"),
+      itemId: asItemId("item-file-change-structured"),
+      payload: {
+        itemType: "file_change",
+        status: "completed",
+        title: "File change",
+        data: {
+          item: {
+            changes: [{ path: "apps/web/src/a.ts" }, { path: "apps/web/src/b.ts" }],
+            result: {
+              output: multiFileDiff,
+            },
+          },
+        },
+      },
+    });
+
+    const thread = await waitForThread(
+      harness.engine,
+      (entry) =>
+        entry.activities.some(
+          (activity: ProviderRuntimeTestActivity) => activity.id === "evt-file-change-structured",
+        ),
+    );
+    const activity = thread.activities.find(
+      (entry: ProviderRuntimeTestActivity) => entry.id === "evt-file-change-structured",
+    );
+    const payload =
+      activity?.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const fileDiffs = Array.isArray(payload?.fileDiffs)
+      ? (payload.fileDiffs as Array<Record<string, unknown>>)
+      : [];
+
+    expect(activity?.kind).toBe("tool.completed");
+    expect(fileDiffs).toHaveLength(2);
+    expect(fileDiffs[0]).toMatchObject({
+      path: "apps/web/src/a.ts",
+    });
+    expect(String(fileDiffs[0]?.diff ?? "")).toContain("diff --git a/apps/web/src/a.ts b/apps/web/src/a.ts");
+    expect(fileDiffs[1]).toMatchObject({
+      path: "apps/web/src/b.ts",
+    });
+    expect(String(fileDiffs[1]?.diff ?? "")).toContain("diff --git a/apps/web/src/b.ts b/apps/web/src/b.ts");
+  });
+
+  it("duplicates hunk-only diff text across changed files for structured fileDiffs", async () => {
+    const harness = await createHarness();
+    const now = new Date().toISOString();
+    const hunkOnlyDiff = ["@@ -1,1 +1,1 @@", "-old", "+new"].join("\n");
+
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-file-change-hunk-only"),
+      provider: "codex",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-file-change-hunk-only"),
+      itemId: asItemId("item-file-change-hunk-only"),
+      payload: {
+        itemType: "file_change",
+        status: "completed",
+        title: "File change",
+        data: {
+          item: {
+            changes: [{ path: "apps/web/src/a.ts" }, { path: "apps/web/src/b.ts" }],
+            result: {
+              output: hunkOnlyDiff,
+            },
+          },
+        },
+      },
+    });
+
+    const thread = await waitForThread(
+      harness.engine,
+      (entry) =>
+        entry.activities.some(
+          (activity: ProviderRuntimeTestActivity) => activity.id === "evt-file-change-hunk-only",
+        ),
+    );
+    const activity = thread.activities.find(
+      (entry: ProviderRuntimeTestActivity) => entry.id === "evt-file-change-hunk-only",
+    );
+    const payload =
+      activity?.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const fileDiffs = Array.isArray(payload?.fileDiffs)
+      ? (payload.fileDiffs as Array<Record<string, unknown>>)
+      : [];
+
+    expect(activity?.kind).toBe("tool.completed");
+    expect(fileDiffs).toHaveLength(2);
+    expect(fileDiffs[0]).toMatchObject({
+      path: "apps/web/src/a.ts",
+      diff: hunkOnlyDiff,
+    });
+    expect(fileDiffs[1]).toMatchObject({
+      path: "apps/web/src/b.ts",
+      diff: hunkOnlyDiff,
+    });
   });
 
   it("stores session.configured payloads as thread activities", async () => {

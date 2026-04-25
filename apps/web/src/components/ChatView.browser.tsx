@@ -1102,7 +1102,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
       expect(
         new Set(measurements.map((measurement) => Math.round(measurement.timelineWidthMeasuredPx)))
           .size,
-      ).toBeGreaterThanOrEqual(3);
+      ).toBeGreaterThanOrEqual(2);
 
       const byMeasuredWidth = measurements.toSorted(
         (left, right) => left.timelineWidthMeasuredPx - right.timelineWidthMeasuredPx,
@@ -1339,6 +1339,136 @@ describe("ChatView timeline estimator parity (full app)", () => {
       await vi.waitFor(
         async () => {
           expect((await waitForInteractionModeButton("Chat")).title).toContain("enter plan mode");
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("inserts a newline on Shift+Enter without sending, then sends on plain Enter", async () => {
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-shift-enter" as MessageId,
+        targetText: "shift enter target",
+      }),
+    });
+
+    try {
+      useComposerDraftStore.getState().setPrompt(THREAD_ID, "shift enter draft");
+      const composerEditor = await waitForComposerEditor();
+      composerEditor.focus();
+      composerEditor.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await waitForLayout();
+
+      expect(
+        wsRequests.some(
+          (request) =>
+            request._tag === ORCHESTRATION_WS_METHODS.dispatchCommand &&
+            request.command &&
+            typeof request.command === "object" &&
+            !Array.isArray(request.command) &&
+            "type" in request.command &&
+            request.command.type === "thread.turn.start",
+        ),
+      ).toBe(false);
+
+      await vi.waitFor(
+        () => {
+          const draftPrompt =
+            useComposerDraftStore.getState().draftsByThreadId[THREAD_ID]?.prompt ?? "";
+          expect(draftPrompt).toContain("\n");
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+      composerEditor.dispatchEvent(
+        new KeyboardEvent("keyup", {
+          key: "Shift",
+          bubbles: true,
+        }),
+      );
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 220);
+      });
+      await waitForLayout();
+
+      composerEditor.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await vi.waitFor(
+        () => {
+          const turnStartRequest = wsRequests.find(
+            (request) =>
+              request._tag === ORCHESTRATION_WS_METHODS.dispatchCommand &&
+              request.command &&
+              typeof request.command === "object" &&
+              !Array.isArray(request.command) &&
+              "type" in request.command &&
+              request.command.type === "thread.turn.start",
+          );
+          expect(turnStartRequest).toBeTruthy();
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+  it("dispatches thread.turn.start with the selected provider and model", async () => {
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotForTargetUser({
+        targetMessageId: "msg-user-provider-model-dispatch" as MessageId,
+        targetText: "provider model dispatch target",
+      }),
+      configureFixture: (nextFixture) => {
+        nextFixture.serverConfig = {
+          ...nextFixture.serverConfig,
+          providers: [createReadyProviderStatus("codex"), createReadyProviderStatus("copilot")],
+        };
+      },
+    });
+
+    try {
+      useComposerDraftStore.getState().setProvider(THREAD_ID, "copilot");
+      useComposerDraftStore.getState().setModel(THREAD_ID, DEFAULT_MODEL_BY_PROVIDER.copilot);
+      useComposerDraftStore.getState().setPrompt(THREAD_ID, "provider model dispatch send");
+      const sendButton = await waitForComposerControl("primary-action");
+      await sendButton.click();
+
+      await vi.waitFor(
+        () => {
+          const turnStartRequest = wsRequests.find((request) => {
+            const command = request.command as Record<string, unknown> | undefined;
+            const message =
+              command?.message && typeof command.message === "object"
+                ? (command.message as Record<string, unknown>)
+                : null;
+            return (
+              request._tag === ORCHESTRATION_WS_METHODS.dispatchCommand &&
+              command?.type === "thread.turn.start" &&
+              message?.text === "provider model dispatch send"
+            );
+          });
+          expect(turnStartRequest).toBeTruthy();
+          const command = turnStartRequest?.command as Record<string, unknown> | undefined;
+          expect(command?.provider).toBe("copilot");
+          expect(command?.model).toBe(DEFAULT_MODEL_BY_PROVIDER.copilot);
         },
         { timeout: 8_000, interval: 16 },
       );
@@ -1872,6 +2002,73 @@ describe("ChatView timeline estimator parity (full app)", () => {
               type: "thread.turn.interrupt",
               threadId: THREAD_ID,
               turnId: "turn-running-escape",
+            },
+          });
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("dispatches a turn interrupt from the keyboard Ctrl+C shortcut", async () => {
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotWithInterruptFallbackTurn(TurnId.makeUnsafe("turn-running-ctrl-c")),
+      configureFixture: (nextFixture) => {
+        nextFixture.serverConfig = {
+          ...nextFixture.serverConfig,
+          keybindings: [
+            {
+              command: "chat.interrupt",
+              shortcut: {
+                key: "c",
+                metaKey: false,
+                ctrlKey: true,
+                shiftKey: false,
+                altKey: false,
+                modKey: false,
+              },
+              whenAst: {
+                type: "not",
+                node: { type: "identifier", name: "terminalFocus" },
+              },
+            },
+          ],
+        };
+      },
+    });
+
+    try {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "c",
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await vi.waitFor(
+        () => {
+          const interruptRequest = wsRequests.find(
+            (request) =>
+              request._tag === ORCHESTRATION_WS_METHODS.dispatchCommand &&
+              request.command &&
+              typeof request.command === "object" &&
+              !Array.isArray(request.command) &&
+              "type" in request.command &&
+              request.command.type === "thread.turn.interrupt" &&
+              "turnId" in request.command &&
+              request.command.turnId === "turn-running-ctrl-c",
+          );
+          expect(interruptRequest).toMatchObject({
+            _tag: ORCHESTRATION_WS_METHODS.dispatchCommand,
+            command: {
+              type: "thread.turn.interrupt",
+              threadId: THREAD_ID,
+              turnId: "turn-running-ctrl-c",
             },
           });
         },

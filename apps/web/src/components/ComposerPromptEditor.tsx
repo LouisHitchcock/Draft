@@ -497,7 +497,23 @@ function ComposerCommandKeyPlugin(props: {
       key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
       event: KeyboardEvent | null,
     ): boolean => {
-      if (!props.onCommandKeyDown || !event) {
+      if (!event) {
+        return false;
+      }
+
+      if (key === "Enter" && (event.shiftKey || event.getModifierState("Shift"))) {
+        event.preventDefault();
+        event.stopPropagation();
+        editor.update(() => {
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) {
+            selection.insertLineBreak();
+          }
+        });
+        return true;
+      }
+
+      if (!props.onCommandKeyDown) {
         return false;
       }
       const handled = props.onCommandKeyDown(key, event);

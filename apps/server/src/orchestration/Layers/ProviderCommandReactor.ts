@@ -55,6 +55,69 @@ function toNonEmptyProviderInput(value: string | undefined): string | undefined 
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : undefined;
 }
+function normalizeProviderStartOptions(
+  value: ProviderStartOptions | undefined,
+): ProviderStartOptions | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const trimValue = (input: string | undefined): string | undefined => {
+    const trimmed = input?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : undefined;
+  };
+
+  const codexBinaryPath = trimValue(value.codex?.binaryPath);
+  const codexHomePath = trimValue(value.codex?.homePath);
+  const codexOpenAiApiKey = trimValue(value.codex?.openAiApiKey);
+  const codexOpenRouterApiKey = trimValue(value.codex?.openRouterApiKey);
+  const copilotBinaryPath = trimValue(value.copilot?.binaryPath);
+  const opencodeBinaryPath = trimValue(value.opencode?.binaryPath);
+  const opencodeOpenRouterApiKey = trimValue(value.opencode?.openRouterApiKey);
+  const kimiBinaryPath = trimValue(value.kimi?.binaryPath);
+  const kimiApiKey = trimValue(value.kimi?.apiKey);
+
+  const next = {
+    ...(codexBinaryPath || codexHomePath || codexOpenAiApiKey || codexOpenRouterApiKey
+      ? {
+          codex: {
+            ...(codexBinaryPath ? { binaryPath: codexBinaryPath } : {}),
+            ...(codexHomePath ? { homePath: codexHomePath } : {}),
+            ...(codexOpenAiApiKey ? { openAiApiKey: codexOpenAiApiKey } : {}),
+            ...(codexOpenRouterApiKey ? { openRouterApiKey: codexOpenRouterApiKey } : {}),
+          },
+        }
+      : {}),
+    ...(copilotBinaryPath ? { copilot: { binaryPath: copilotBinaryPath } } : {}),
+    ...(opencodeBinaryPath || opencodeOpenRouterApiKey
+      ? {
+          opencode: {
+            ...(opencodeBinaryPath ? { binaryPath: opencodeBinaryPath } : {}),
+            ...(opencodeOpenRouterApiKey ? { openRouterApiKey: opencodeOpenRouterApiKey } : {}),
+          },
+        }
+      : {}),
+    ...(kimiBinaryPath || kimiApiKey
+      ? {
+          kimi: {
+            ...(kimiBinaryPath ? { binaryPath: kimiBinaryPath } : {}),
+            ...(kimiApiKey ? { apiKey: kimiApiKey } : {}),
+          },
+        }
+      : {}),
+  } satisfies ProviderStartOptions;
+
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+function areProviderStartOptionsEqual(
+  left: ProviderStartOptions | undefined,
+  right: ProviderStartOptions | undefined,
+): boolean {
+  const normalizedLeft = normalizeProviderStartOptions(left);
+  const normalizedRight = normalizeProviderStartOptions(right);
+  return JSON.stringify(normalizedLeft ?? null) === JSON.stringify(normalizedRight ?? null);
+}
 
 function applyWorkspaceAgentsInstructions(input: {
   readonly agentsContents: string | undefined;
@@ -172,12 +235,10 @@ function selectLaunchableProvider(input: {
   readonly statuses: ReadonlyArray<ServerProviderStatus>;
 }): ProviderKind | undefined {
   if (input.requestedProvider) {
-    const requestedStatus = input.statuses.find(
-      (status) => status.provider === input.requestedProvider,
-    );
-    if (requestedStatus && isProviderLaunchable(requestedStatus)) {
-      return input.requestedProvider;
-    }
+    // Preserve explicit provider intent from the caller (UI/thread command).
+    // If startup fails, surface that provider's real error instead of silently
+    // rerouting to a different adapter.
+    return input.requestedProvider;
   }
 
   const launchableStatuses = input.statuses.filter(isProviderLaunchable);
@@ -399,6 +460,7 @@ const make = Effect.gen(function* () {
       readonly model?: string;
       readonly modelOptions?: ProviderModelOptions;
       readonly providerOptions?: ProviderStartOptions;
+      readonly providerOptionsChanged?: boolean;
     },
   ) {
     const readModel = yield* orchestrationEngine.getReadModel();
@@ -512,8 +574,15 @@ const make = Effect.gen(function* () {
           usesCodexOpenRouterRouting(activeSession?.model);
       const shouldRestartForModelChange =
         modelChanged && (sessionModelSwitch === "restart-session" || codexRoutingChanged);
+      const shouldRestartForProviderOptionsChange =
+        options?.providerOptionsChanged === true && !providerChanged;
 
-      if (!runtimeModeChanged && !providerChanged && !shouldRestartForModelChange) {
+      if (
+        !runtimeModeChanged &&
+        !providerChanged &&
+        !shouldRestartForModelChange &&
+        !shouldRestartForProviderOptionsChange
+      ) {
         return {
           threadId: existingSessionThreadId,
           startedFresh: false,
@@ -521,7 +590,7 @@ const make = Effect.gen(function* () {
       }
 
       const resumeCursor =
-        providerChanged || shouldRestartForModelChange
+        providerChanged || shouldRestartForModelChange || shouldRestartForProviderOptionsChange
           ? undefined
           : (activeSession?.resumeCursor ?? undefined);
       yield* Effect.logInfo("provider command reactor restarting provider session", {
@@ -536,6 +605,8 @@ const make = Effect.gen(function* () {
         modelChanged,
         codexRoutingChanged,
         shouldRestartForModelChange,
+        providerOptionsChanged: options?.providerOptionsChanged === true,
+        shouldRestartForProviderOptionsChange,
         hasResumeCursor: resumeCursor !== undefined,
       });
       const restartedSession = yield* startProviderSession({
@@ -593,14 +664,22 @@ const make = Effect.gen(function* () {
     const workspaceAgentsFile = workspaceCwd
       ? readProjectAgentsFile({ cwd: workspaceCwd, includeContents: true })
       : null;
+    const previousProviderOptions = threadProviderOptions.get(input.threadId);
+    const providerOptionsChanged = !areProviderStartOptionsEqual(
+      previousProviderOptions,
+      input.providerOptions,
+    );
     if (input.providerOptions !== undefined) {
       threadProviderOptions.set(input.threadId, input.providerOptions);
+    } else {
+      threadProviderOptions.delete(input.threadId);
     }
     const ensuredSession = yield* ensureSessionForThread(input.threadId, input.createdAt, {
       ...(input.provider !== undefined ? { provider: input.provider } : {}),
       ...(input.model !== undefined ? { model: input.model } : {}),
       ...(input.modelOptions !== undefined ? { modelOptions: input.modelOptions } : {}),
       ...(input.providerOptions !== undefined ? { providerOptions: input.providerOptions } : {}),
+      ...(providerOptionsChanged ? { providerOptionsChanged: true } : {}),
     });
     const selectedSkills =
       workspaceCwd && input.skills && input.skills.length > 0

@@ -19,7 +19,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ServerConfig } from "../../config.ts";
 import { TextGenerationError } from "../../git/Errors.ts";
 import { ProviderAdapterRequestError } from "../../provider/Errors.ts";
-import { clearTransientTurnStartProviderOptions } from "../../provider/transientProviderOptions.ts";
+import {
+  clearTransientTurnStartProviderOptions,
+  putTransientTurnStartProviderOptions,
+} from "../../provider/transientProviderOptions.ts";
 import { OrchestrationEventStoreLive } from "../../persistence/Layers/OrchestrationEventStore.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
@@ -92,6 +95,7 @@ describe("ProviderCommandReactor", () => {
     readonly capabilitiesByProvider?: Partial<
       Record<ProviderSession["provider"], "in-session" | "restart-session" | "unsupported">
     >;
+    readonly providerStatuses?: ReadonlyArray<ServerProviderStatus>;
   }) {
     const now = new Date().toISOString();
     const stateDir = input?.stateDir ?? fs.mkdtempSync(path.join(os.tmpdir(), "draft-reactor-"));
@@ -196,7 +200,7 @@ describe("ProviderCommandReactor", () => {
     );
 
     const unsupported = () => Effect.die(new Error("Unsupported provider call in test")) as never;
-    const providerStatuses: ReadonlyArray<ServerProviderStatus> = [
+    const providerStatuses: ReadonlyArray<ServerProviderStatus> = input?.providerStatuses ?? [
       {
         provider: "codex",
         status: "ready",
@@ -329,6 +333,53 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.runtimeMode).toBe("approval-required");
   });
 
+  it("keeps an explicitly requested provider instead of silently falling back", async () => {
+    const now = new Date().toISOString();
+    const harness = await createHarness({
+      providerStatuses: [
+        {
+          provider: "codex",
+          status: "error",
+          available: false,
+          authStatus: "unauthenticated",
+          checkedAt: now,
+          message: "Codex auth probe failed.",
+        },
+        {
+          provider: "pi",
+          status: "ready",
+          available: true,
+          authStatus: "authenticated",
+          checkedAt: now,
+        },
+      ],
+    });
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.makeUnsafe("cmd-turn-start-explicit-provider"),
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-explicit-provider"),
+          role: "user",
+          text: "use codex explicitly",
+          attachments: [],
+        },
+        provider: "codex",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.startSession.mock.calls.length === 1);
+    expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
+      provider: "codex",
+      model: "gpt-5-codex",
+    });
+  });
+
   it("injects workspace AGENTS.md instructions into provider turn input", async () => {
     const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "draft-reactor-workspace-"));
     fs.writeFileSync(
@@ -417,6 +468,67 @@ describe("ProviderCommandReactor", () => {
           fastMode: true,
         },
       },
+    });
+  });
+
+  it("restarts active sessions when provider options change", async () => {
+    const harness = await createHarness();
+    const now = new Date().toISOString();
+    const firstCommandId = CommandId.makeUnsafe("cmd-turn-start-provider-options-initial");
+    const secondCommandId = CommandId.makeUnsafe("cmd-turn-start-provider-options-updated");
+
+    putTransientTurnStartProviderOptions(firstCommandId, {
+      codex: {
+        openAiApiKey: "sk-old",
+      },
+    });
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: firstCommandId,
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-provider-options-initial"),
+          role: "user",
+          text: "first with key",
+          attachments: [],
+        },
+        provider: "codex",
+        model: "gpt-5.4",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.startSession.mock.calls.length === 1);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: secondCommandId,
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-provider-options-updated"),
+          role: "user",
+          text: "second with updated key",
+          attachments: [],
+        },
+        provider: "codex",
+        model: "gpt-5.4",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.startSession.mock.calls.length === 2);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+    expect(harness.startSession.mock.calls[1]?.[1]).toMatchObject({
+      provider: "codex",
+      model: "gpt-5.4",
     });
   });
 

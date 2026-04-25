@@ -12,7 +12,7 @@ import { normalizeModelSlug } from "@draft/shared/model";
 import { DEFAULT_INTERACTION_MODE, DEFAULT_RUNTIME_MODE, type ChatImageAttachment } from "./types";
 import { Debouncer } from "@tanstack/react-pacer";
 import { create } from "zustand";
-import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
+import { persist, type StateStorage, type StorageValue } from "zustand/middleware";
 
 export const COMPOSER_DRAFT_STORAGE_KEY = "draft:composer-drafts:v1";
 const LEGACY_COMPOSER_DRAFT_STORAGE_KEY = "draft:composer-drafts:v1";
@@ -23,6 +23,13 @@ const COMPOSER_PERSIST_DEBOUNCE_MS = 300;
 interface DebouncedStorage extends StateStorage {
   getItem: (name: string) => string | null;
   setItem: (name: string, value: string) => void;
+  removeItem: (name: string) => void;
+  flush: () => void;
+}
+
+interface DebouncedPersistStorage<T> {
+  getItem: (name: string) => StorageValue<T> | null;
+  setItem: (name: string, value: StorageValue<T>) => void;
   removeItem: (name: string) => void;
   flush: () => void;
 }
@@ -53,15 +60,48 @@ export function createDebouncedStorage(baseStorage: StateStorage): DebouncedStor
   };
 }
 
-const composerDebouncedStorage: DebouncedStorage =
+function createDebouncedPersistStorage<T>(baseStorage: StateStorage): DebouncedPersistStorage<T> {
+  const debouncedSetItem = new Debouncer(
+    (name: string, value: StorageValue<T>) => {
+      baseStorage.setItem(name, JSON.stringify(value));
+    },
+    { wait: COMPOSER_PERSIST_DEBOUNCE_MS },
+  );
+
+  return {
+    getItem: (name) => {
+      const raw = baseStorage.getItem(name);
+      if (typeof raw !== "string" || raw.length === 0) {
+        return null;
+      }
+      try {
+        return JSON.parse(raw) as StorageValue<T>;
+      } catch {
+        return null;
+      }
+    },
+    setItem: (name, value) => {
+      debouncedSetItem.maybeExecute(name, value);
+    },
+    removeItem: (name) => {
+      debouncedSetItem.cancel();
+      baseStorage.removeItem(name);
+    },
+    flush: () => {
+      debouncedSetItem.flush();
+    },
+  };
+}
+
+const composerPersistStorage: DebouncedPersistStorage<PersistedComposerDraftStoreState> =
   typeof localStorage !== "undefined"
-    ? createDebouncedStorage(localStorage)
+    ? createDebouncedPersistStorage<PersistedComposerDraftStoreState>(localStorage)
     : { getItem: () => null, setItem: () => {}, removeItem: () => {}, flush: () => {} };
 
 // Flush pending composer draft writes before page unload to prevent data loss.
 if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", () => {
-    composerDebouncedStorage.flush();
+    composerPersistStorage.flush();
   });
 }
 
@@ -518,30 +558,17 @@ function normalizePersistedComposerDraftState(value: unknown): PersistedComposer
   };
 }
 
-function parsePersistedDraftStateRaw(raw: string | null): PersistedComposerDraftStoreState {
-  if (!raw) {
-    return EMPTY_PERSISTED_DRAFT_STORE_STATE;
-  }
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === "object" && "state" in parsed) {
-      return normalizePersistedComposerDraftState((parsed as { state?: unknown }).state);
-    }
-    return normalizePersistedComposerDraftState(parsed);
-  } catch {
-    return EMPTY_PERSISTED_DRAFT_STORE_STATE;
-  }
-}
 
 function readPersistedAttachmentIdsFromStorage(threadId: ThreadId): string[] {
   if (threadId.length === 0) {
     return [];
   }
   try {
-    const raw =
-      localStorage.getItem(COMPOSER_DRAFT_STORAGE_KEY) ??
-      localStorage.getItem(LEGACY_COMPOSER_DRAFT_STORAGE_KEY);
-    const persisted = parsePersistedDraftStateRaw(raw);
+    composerPersistStorage.flush();
+    const persisted =
+      composerPersistStorage.getItem(COMPOSER_DRAFT_STORAGE_KEY)?.state ??
+      composerPersistStorage.getItem(LEGACY_COMPOSER_DRAFT_STORAGE_KEY)?.state ??
+      EMPTY_PERSISTED_DRAFT_STORE_STATE;
     return (persisted.draftsByThreadId[threadId]?.attachments ?? []).map(
       (attachment) => attachment.id,
     );
@@ -868,9 +895,13 @@ export const useComposerDraftStore = create<ComposerDraftStoreState>()(
           return;
         }
         set((state) => {
-          const existing = state.draftsByThreadId[threadId] ?? createEmptyThreadDraft();
+          const existing = state.draftsByThreadId[threadId];
+          if (existing?.prompt === prompt) {
+            return state;
+          }
+          const base = existing ?? createEmptyThreadDraft();
           const nextDraft: ComposerThreadDraftState = {
-            ...existing,
+            ...base,
             prompt,
           };
           const nextDraftsByThreadId = { ...state.draftsByThreadId };
@@ -1300,29 +1331,36 @@ export const useComposerDraftStore = create<ComposerDraftStoreState>()(
     {
       name: COMPOSER_DRAFT_STORAGE_KEY,
       version: 1,
-      storage: createJSONStorage(() => ({
+      storage: {
         getItem: (name) => {
-          const current = composerDebouncedStorage.getItem(name);
+          const current = composerPersistStorage.getItem(name);
           if (current !== null) {
             return current;
           }
-          const legacy = composerDebouncedStorage.getItem(LEGACY_COMPOSER_DRAFT_STORAGE_KEY);
+          if (name === LEGACY_COMPOSER_DRAFT_STORAGE_KEY) {
+            return null;
+          }
+          const legacy = composerPersistStorage.getItem(LEGACY_COMPOSER_DRAFT_STORAGE_KEY);
           if (legacy === null) {
             return null;
           }
-          composerDebouncedStorage.setItem(name, legacy);
-          composerDebouncedStorage.removeItem(LEGACY_COMPOSER_DRAFT_STORAGE_KEY);
+          composerPersistStorage.setItem(name, legacy);
+          composerPersistStorage.removeItem(LEGACY_COMPOSER_DRAFT_STORAGE_KEY);
           return legacy;
         },
         setItem: (name, value) => {
-          composerDebouncedStorage.setItem(name, value);
-          composerDebouncedStorage.removeItem(LEGACY_COMPOSER_DRAFT_STORAGE_KEY);
+          composerPersistStorage.setItem(name, value);
+          if (name !== LEGACY_COMPOSER_DRAFT_STORAGE_KEY) {
+            composerPersistStorage.removeItem(LEGACY_COMPOSER_DRAFT_STORAGE_KEY);
+          }
         },
         removeItem: (name) => {
-          composerDebouncedStorage.removeItem(name);
-          composerDebouncedStorage.removeItem(LEGACY_COMPOSER_DRAFT_STORAGE_KEY);
+          composerPersistStorage.removeItem(name);
+          if (name !== LEGACY_COMPOSER_DRAFT_STORAGE_KEY) {
+            composerPersistStorage.removeItem(LEGACY_COMPOSER_DRAFT_STORAGE_KEY);
+          }
         },
-      })),
+      },
       partialize: (state) => {
         const persistedDraftsByThreadId: PersistedComposerDraftStoreState["draftsByThreadId"] = {};
         for (const [threadId, draft] of Object.entries(state.draftsByThreadId)) {

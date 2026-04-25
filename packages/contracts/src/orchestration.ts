@@ -49,6 +49,7 @@ export const DEFAULT_PROVIDER_KIND: ProviderKind = "codex";
 const CodexProviderStartOptions = Schema.Struct({
   binaryPath: Schema.optional(TrimmedNonEmptyString),
   homePath: Schema.optional(TrimmedNonEmptyString),
+  openAiApiKey: Schema.optional(TrimmedNonEmptyString),
   openRouterApiKey: Schema.optional(TrimmedNonEmptyString),
 });
 const CopilotProviderStartOptions = Schema.Struct({

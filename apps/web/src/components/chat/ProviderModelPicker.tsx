@@ -91,7 +91,12 @@ export const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
   cursor: CursorIcon,
 };
 
-export const AVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(isAvailableProviderOption);
+export const AVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(
+  (
+    option,
+  ): option is { value: AvailableProviderPickerKind; label: string; available: true } =>
+    isAvailableProviderOption(option) && option.value === "codex",
+);
 export const UNAVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter((option) => !option.available);
 export const COMING_SOON_PROVIDER_OPTIONS = [
   { id: "gemini", label: "Gemini", icon: Gemini },

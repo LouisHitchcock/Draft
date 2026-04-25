@@ -8,10 +8,11 @@ import { Group, GroupSeparator } from "../ui/group";
 import { Menu, MenuItem, MenuPopup, MenuShortcut, MenuTrigger } from "../ui/menu";
 import {
   AntigravityIcon,
-  CursorIcon,
   Icon,
+  SublimeTextIcon,
   VisualStudioCode,
   VisualStudioCodeInsiders,
+  WarpIcon,
   Zed,
 } from "../Icons";
 import { isMacPlatform, isWindowsPlatform } from "~/lib/utils";
@@ -20,9 +21,9 @@ import { readNativeApi } from "~/nativeApi";
 const resolveOptions = (platform: string, availableEditors: ReadonlyArray<EditorId>) => {
   const baseOptions: ReadonlyArray<{ label: string; Icon: Icon; value: EditorId }> = [
     {
-      label: "Cursor",
-      Icon: CursorIcon,
-      value: "cursor",
+      label: "Warp",
+      Icon: WarpIcon,
+      value: "warp",
     },
     {
       label: "VS Code",
@@ -33,6 +34,11 @@ const resolveOptions = (platform: string, availableEditors: ReadonlyArray<Editor
       label: "VS Code Insiders",
       Icon: VisualStudioCodeInsiders,
       value: "vscode-insiders",
+    },
+    {
+      label: "Sublime Text",
+      Icon: SublimeTextIcon,
+      value: "sublime",
     },
     {
       label: "Zed",

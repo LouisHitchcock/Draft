@@ -183,6 +183,7 @@ const CODEX_SPARK_MODEL = "gpt-5.3-codex-spark";
 const CODEX_SPARK_FALLBACK_MODEL = "gpt-5.3-codex";
 const CODEX_SPARK_DISABLED_PLAN_TYPES = new Set<CodexPlanType>(["free", "go", "plus"]);
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+const OPENAI_ENV_KEY = "OPENAI_API_KEY";
 const OPENROUTER_ENV_KEY = "OPENROUTER_API_KEY";
 const OPENROUTER_NO_ELIGIBLE_ENDPOINT_SNIPPETS = [
   "no endpoints available",
@@ -543,6 +544,13 @@ function readOptionalOpenRouterApiKey(input: {
   return apiKey && apiKey.length > 0 ? apiKey : undefined;
 }
 
+function readOptionalOpenAiApiKey(input: {
+  readonly providerOptions?: ProviderSessionStartInput["providerOptions"];
+}): string | undefined {
+  const apiKey = input.providerOptions?.codex?.openAiApiKey?.trim();
+  return apiKey && apiKey.length > 0 ? apiKey : undefined;
+}
+
 export function buildCodexAppServerArgs(input: { readonly model?: string }): ReadonlyArray<string> {
   const normalizedModel = normalizeCodexModelSlug(input.model);
   const usesOpenRouter = isCodexOpenRouterModel(normalizedModel ?? input.model);
@@ -564,6 +572,7 @@ export function buildCodexAppServerArgs(input: { readonly model?: string }): Rea
 export function buildCodexAppServerEnv(input: {
   readonly homePath?: string;
   readonly model?: string;
+  readonly openAiApiKey?: string;
   readonly openRouterApiKey?: string;
   readonly baseEnv?: NodeJS.ProcessEnv;
 }): NodeJS.ProcessEnv {
@@ -572,13 +581,21 @@ export function buildCodexAppServerEnv(input: {
     env.CODEX_HOME = input.homePath;
   }
   delete env[OPENROUTER_ENV_KEY];
+  const openAiApiKey = input.openAiApiKey?.trim();
 
   const openRouterApiKey = input.openRouterApiKey?.trim();
   const usesOpenRouter = isCodexOpenRouterModel(
     normalizeCodexModelSlug(input.model) ?? input.model,
   );
-  if (usesOpenRouter && openRouterApiKey !== undefined && openRouterApiKey.length > 0) {
-    env[OPENROUTER_ENV_KEY] = openRouterApiKey;
+  if (usesOpenRouter) {
+    delete env[OPENAI_ENV_KEY];
+    if (openRouterApiKey !== undefined && openRouterApiKey.length > 0) {
+      env[OPENROUTER_ENV_KEY] = openRouterApiKey;
+    }
+    return env;
+  }
+  if (openAiApiKey !== undefined && openAiApiKey.length > 0) {
+    env[OPENAI_ENV_KEY] = openAiApiKey;
   }
   return env;
 }
@@ -772,6 +789,9 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
       const codexOptions = readCodexProviderOptions(input);
       const codexBinaryPath = codexOptions.binaryPath ?? "codex";
       const codexHomePath = codexOptions.homePath;
+      const openAiApiKey = readOptionalOpenAiApiKey({
+        providerOptions: input.providerOptions,
+      });
       const openRouterApiKey = readOptionalOpenRouterApiKey({
         providerOptions: input.providerOptions,
       });
@@ -790,6 +810,7 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
           baseEnv: process.env,
           ...(codexHomePath !== undefined ? { homePath: codexHomePath } : {}),
           ...(input.model !== undefined ? { model: input.model } : {}),
+          ...(openAiApiKey !== undefined ? { openAiApiKey } : {}),
           ...(openRouterApiKey !== undefined ? { openRouterApiKey } : {}),
         }),
         stdio: ["pipe", "pipe", "pipe"],

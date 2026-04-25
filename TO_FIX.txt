@@ -1,0 +1,15 @@
+TO FIX
+
+(fixed) - Chat composer input: Shift+Enter still sends the message instead of reliably inserting a newline and allowing continued typing. I dont think new lines are suppoted in general in the message board, because even when copying a pice of text with a new line it pastes as a monolthic block
+(fixed) - File change diff panel now expands with per-file tabs, renders colorized unified diffs, and uses structured per-file payload slices with fallback handling
+(fixed) - File-change diff styling aligned with the rest of Draft (panel surfaces, tab labels, and diff theming)
+(fixed) - Shorter shell command drop down still takes up a fixed amount of space, it should dynamically scale to the actual output from the shell command
+(fixed) - Every shell command begins with ""C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command {ACTUAL COMMAND}" we can hide the part that is not the actualcommand, to clean up overall interface & improve readbility
+- Warning box above user entry should have a "x" button to close the warning, especially if it stale
+(fixed) - Multiple "runtime errors" from a single command are merged under one command entry with expandable detail
+- AI model selector broken (TEMP FIXED TO HARDCODE CODEX)
+(fixed) - "Plan updated" but cannot view plan, should introduce Warp style plan viewing in another sidebar
+(fixed) - Typing input lag reduced with timeline memoization and prompt no-op guards; input is still sent on submit (not per keystroke)
+(fixed) - Multi-line chats are now resizable and scrollable so long prompts are no longer cut off
+- Plan tab doesnt seem to be getting updated throughout usage - plan also seems to have randomly been deleted half way though?
+

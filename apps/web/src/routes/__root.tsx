@@ -363,15 +363,15 @@ function EventRouter() {
         }
         setProjectExpanded(payload.bootstrapProjectId, true);
 
-        if (pathnameRef.current !== "/") {
+        if (pathnameRef.current !== "/" && pathnameRef.current !== "/draft") {
           return;
         }
         if (handledBootstrapThreadIdRef.current === payload.bootstrapThreadId) {
           return;
         }
         await navigate({
-          to: "/$threadId",
-          params: { threadId: payload.bootstrapThreadId },
+          to: "/draft",
+          search: { threadId: payload.bootstrapThreadId },
           replace: true,
         });
         handledBootstrapThreadIdRef.current = payload.bootstrapThreadId;
@@ -467,7 +467,7 @@ function DesktopProjectBootstrap() {
   const restoredThreadIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!isElectron || pathname !== "/" || !threadsHydrated) {
+    if (!isElectron || (pathname !== "/" && pathname !== "/draft") || !threadsHydrated) {
       return;
     }
 
@@ -493,8 +493,8 @@ function DesktopProjectBootstrap() {
 
     restoredThreadIdRef.current = latestThreadId;
     void navigate({
-      to: "/$threadId",
-      params: { threadId: latestThreadId },
+      to: "/draft",
+      search: { threadId: latestThreadId },
       replace: true,
     });
   }, [

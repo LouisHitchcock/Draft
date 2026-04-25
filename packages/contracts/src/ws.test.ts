@@ -39,6 +39,50 @@ it.effect("rejects getTurnDiff requests when fromTurnCount > toTurnCount", () =>
   }),
 );
 
+it.effect("accepts tools.execute websocket requests", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-tools-execute",
+      body: {
+        _tag: WS_METHODS.toolsExecute,
+        threadId: "thread-tools",
+        executionMode: "auto",
+        invocations: [
+          {
+            toolCallId: "call-1",
+            toolName: "grep",
+            input: {
+              query: "foo",
+            },
+          },
+        ],
+      },
+    });
+    assert.strictEqual(parsed.body._tag, WS_METHODS.toolsExecute);
+  }),
+);
+
+it.effect("accepts tools.event push envelopes", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWsResponse({
+      type: "push",
+      sequence: 5,
+      channel: WS_CHANNELS.toolsEvent,
+      data: {
+        type: "tool.started",
+        runId: "run-1",
+        threadId: "thread-tools",
+        toolCallId: "call-1",
+        toolName: "grep",
+        createdAt: new Date().toISOString(),
+      },
+    });
+    if (!(typeof parsed === "object") || !("type" in parsed)) {
+      assert.fail("expected tools.event push envelope");
+    }
+  }),
+);
+
 it.effect("trims websocket request id and nested orchestration ids", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWebSocketRequest({

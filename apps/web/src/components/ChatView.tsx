@@ -238,7 +238,14 @@ import {
   MenuShortcut,
   MenuTrigger,
 } from "./ui/menu";
-import { CursorIcon, Icon, VisualStudioCode, VisualStudioCodeInsiders, Zed } from "./Icons";
+import {
+  Icon,
+  SublimeTextIcon,
+  VisualStudioCode,
+  VisualStudioCodeInsiders,
+  WarpIcon,
+  Zed,
+} from "./Icons";
 import { cn, isMacPlatform, isWindowsPlatform, randomUUID } from "~/lib/utils";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
@@ -372,6 +379,7 @@ const EMPTY_PROVIDER_STATUS_MODEL_OPTIONS_BY_PROVIDER = {
 } as const satisfies Record<ProviderKind, ReadonlyArray<PickerModelOption>>;
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
 const COMPOSER_PATH_QUERY_DEBOUNCE_MS = 120;
+const COMPOSER_SHIFT_ENTER_SEND_GUARD_MS = 180;
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
 const TERMINAL_DIRECTORY_EXPLORER_LIMIT = 120;
@@ -392,6 +400,7 @@ function buildProviderOptionsForDispatch(input: {
   readonly settings: {
     readonly codexBinaryPath: string;
     readonly codexHomePath: string;
+    readonly openAiApiKey: string;
     readonly openRouterApiKey: string;
     readonly copilotBinaryPath: string;
     readonly opencodeBinaryPath: string;
@@ -401,6 +410,7 @@ function buildProviderOptionsForDispatch(input: {
 }) {
   const codexBinaryPath = input.settings.codexBinaryPath.trim();
   const codexHomePath = input.settings.codexHomePath.trim();
+  const openAiApiKey = input.settings.openAiApiKey.trim();
   const openRouterApiKey = input.settings.openRouterApiKey.trim();
   const copilotBinaryPath = input.settings.copilotBinaryPath.trim();
   const opencodeBinaryPath = input.settings.opencodeBinaryPath.trim();
@@ -409,11 +419,12 @@ function buildProviderOptionsForDispatch(input: {
 
   switch (input.provider) {
     case "codex":
-      return codexBinaryPath || codexHomePath || openRouterApiKey
+      return codexBinaryPath || codexHomePath || openAiApiKey || openRouterApiKey
         ? {
             codex: {
               ...(codexBinaryPath ? { binaryPath: codexBinaryPath } : {}),
               ...(codexHomePath ? { homePath: codexHomePath } : {}),
+              ...(openAiApiKey ? { openAiApiKey } : {}),
               ...(openRouterApiKey ? { openRouterApiKey } : {}),
             },
           }
@@ -449,6 +460,10 @@ function buildProviderOptionsForDispatch(input: {
     default:
       return undefined;
   }
+}
+
+function resolveTemporaryForcedProvider(): ProviderKind | null {
+  return null;
 }
 
 function getCustomModelsForProvider(
@@ -1199,6 +1214,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const [threadExportPath, setThreadExportPath] = useState("");
   const [isSavingThreadExport, setIsSavingThreadExport] = useState(false);
   const [isComposerFooterCompact, setIsComposerFooterCompact] = useState(false);
+  const [isShiftPressed, setIsShiftPressed] = useState(false);
   // Tracks whether the user explicitly dismissed the sidebar for the active turn.
   const planSidebarDismissedForTurnRef = useRef<string | null>(null);
   // When set, the thread-change reset effect will open the sidebar instead of closing it.
@@ -1263,6 +1279,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const composerMenuOpenRef = useRef(false);
   const composerMenuItemsRef = useRef<ComposerCommandItem[]>([]);
   const activeComposerMenuItemRef = useRef<ComposerCommandItem | null>(null);
+  const suppressComposerSendRef = useRef(false);
+  const suppressComposerSendGuardUntilRef = useRef(0);
+  const suppressComposerSendResetTimerRef = useRef<number | null>(null);
+  const isShiftPressedRef = useRef(false);
   const attachmentPreviewHandoffByMessageIdRef = useRef<Record<string, string[]>>({});
   const attachmentPreviewHandoffTimeoutByMessageIdRef = useRef<Record<string, number>>({});
   const sendInFlightByThreadIdRef = useRef<Record<string, boolean>>({});
@@ -1272,6 +1292,76 @@ export default function ChatView({ threadId }: ChatViewProps) {
     messagesScrollRef.current = element;
     setMessagesScrollElement(element);
   }, []);
+  const isComposerContentEditableTarget = useCallback((target: EventTarget | null): boolean => {
+    if (!(target instanceof HTMLElement) || !target.isContentEditable) {
+      return false;
+    }
+    return composerFormRef.current?.contains(target) ?? false;
+  }, []);
+  const setShiftPressed = useCallback((nextPressed: boolean) => {
+    if (isShiftPressedRef.current === nextPressed) {
+      return;
+    }
+    isShiftPressedRef.current = nextPressed;
+    setIsShiftPressed(nextPressed);
+  }, []);
+  const suppressComposerSendForCurrentTick = useCallback(() => {
+    suppressComposerSendGuardUntilRef.current = Date.now() + COMPOSER_SHIFT_ENTER_SEND_GUARD_MS;
+    suppressComposerSendRef.current = true;
+    if (suppressComposerSendResetTimerRef.current !== null) {
+      window.clearTimeout(suppressComposerSendResetTimerRef.current);
+    }
+    suppressComposerSendResetTimerRef.current = window.setTimeout(() => {
+      suppressComposerSendResetTimerRef.current = null;
+      if (Date.now() >= suppressComposerSendGuardUntilRef.current) {
+        suppressComposerSendRef.current = false;
+      }
+    }, COMPOSER_SHIFT_ENTER_SEND_GUARD_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (suppressComposerSendResetTimerRef.current !== null) {
+        window.clearTimeout(suppressComposerSendResetTimerRef.current);
+      }
+    };
+  }, []);
+  useEffect(() => {
+    const handleKeyDownCapture = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Shift" || event.shiftKey || event.getModifierState("Shift")) {
+        setShiftPressed(true);
+      }
+      if (event.key !== "Enter") {
+        return;
+      }
+      if (!event.shiftKey && !event.getModifierState("Shift")) {
+        return;
+      }
+      if (!isComposerContentEditableTarget(event.target)) {
+        return;
+      }
+      suppressComposerSendForCurrentTick();
+    };
+    const handleKeyUpCapture = (event: globalThis.KeyboardEvent) => {
+      if (
+        event.key === "Shift" ||
+        (!event.shiftKey && !event.getModifierState("Shift"))
+      ) {
+        setShiftPressed(false);
+      }
+    };
+    const handleWindowBlur = () => {
+      setShiftPressed(false);
+    };
+    window.addEventListener("keydown", handleKeyDownCapture, true);
+    window.addEventListener("keyup", handleKeyUpCapture, true);
+    window.addEventListener("blur", handleWindowBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDownCapture, true);
+      window.removeEventListener("keyup", handleKeyUpCapture, true);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
+  }, [isComposerContentEditableTarget, setShiftPressed, suppressComposerSendForCurrentTick]);
 
   const terminalState = useTerminalStateStore((state) =>
     selectThreadTerminalState(state.terminalStateByThreadId, threadId),
@@ -1524,18 +1614,32 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
   const sessionProvider = activeThread?.session?.provider ?? activeThread?.provider ?? null;
   const selectedProviderByThreadId = composerDraft.provider;
-  const hasThreadStarted = Boolean(
-    activeThread &&
-    (activeThread.latestTurn !== null ||
-      activeThread.messages.length > 0 ||
-      activeThread.session !== null),
-  );
   const selectedServiceTierSetting = settings.codexServiceTier;
   const selectedServiceTier = resolveAppServiceTier(selectedServiceTierSetting);
-  const lockedProvider: ProviderKind | null = hasThreadStarted
-    ? (sessionProvider ?? selectedProviderByThreadId ?? null)
-    : null;
-  const selectedProvider: ProviderKind = lockedProvider ?? selectedProviderByThreadId ?? "codex";
+  const lockedProvider: ProviderKind | null = resolveTemporaryForcedProvider();
+  const selectedProvider: ProviderKind =
+    lockedProvider ?? selectedProviderByThreadId ?? sessionProvider ?? "codex";
+  useEffect(() => {
+    if (!activeThread?.id) {
+      return;
+    }
+    if (lockedProvider !== null) {
+      if (selectedProviderByThreadId !== lockedProvider) {
+        setComposerDraftProvider(activeThread.id, lockedProvider);
+      }
+      return;
+    }
+    if (selectedProviderByThreadId !== null) {
+      return;
+    }
+    setComposerDraftProvider(activeThread.id, sessionProvider ?? "codex");
+  }, [
+    activeThread?.id,
+    lockedProvider,
+    selectedProviderByThreadId,
+    sessionProvider,
+    setComposerDraftProvider,
+  ]);
   const [providerStatusModelOptionsByProvider, setProviderStatusModelOptionsByProvider] = useState<
     Record<ProviderKind, ReadonlyArray<PickerModelOption>>
   >(EMPTY_PROVIDER_STATUS_MODEL_OPTIONS_BY_PROVIDER);
@@ -1795,6 +1899,56 @@ export default function ChatView({ threadId }: ChatViewProps) {
   );
   const selectedModelUsesOpenRouter =
     selectedProvider === "codex" && isCodexOpenRouterModel(selectedModel);
+  const codexAuthSourceIndicator = useMemo(() => {
+    if (selectedProvider !== "codex") {
+      return null;
+    }
+
+    const hasOpenAiApiKey = settings.openAiApiKey.trim().length > 0;
+    const hasOpenRouterApiKey = settings.openRouterApiKey.trim().length > 0;
+
+    if (selectedModelUsesOpenRouter) {
+      if (hasOpenRouterApiKey) {
+        return {
+          label: chatCopy.authSourceOpenRouterKey,
+          description: chatCopy.authSourceOpenRouterKeyHint,
+          variant: "success" as const,
+        };
+      }
+      return {
+        label: chatCopy.authSourceOpenRouterMissing,
+        description: chatCopy.authSourceOpenRouterMissingHint,
+        variant: "warning" as const,
+      };
+    }
+
+    if (hasOpenAiApiKey) {
+      return {
+        label: chatCopy.authSourceOpenAiKey,
+        description: chatCopy.authSourceOpenAiKeyHint,
+        variant: "success" as const,
+      };
+    }
+
+    return {
+      label: chatCopy.authSourceFallback,
+      description: chatCopy.authSourceFallbackHint,
+      variant: "outline" as const,
+    };
+  }, [
+    chatCopy.authSourceFallback,
+    chatCopy.authSourceFallbackHint,
+    chatCopy.authSourceOpenAiKey,
+    chatCopy.authSourceOpenAiKeyHint,
+    chatCopy.authSourceOpenRouterKey,
+    chatCopy.authSourceOpenRouterKeyHint,
+    chatCopy.authSourceOpenRouterMissing,
+    chatCopy.authSourceOpenRouterMissingHint,
+    selectedModelUsesOpenRouter,
+    selectedProvider,
+    settings.openAiApiKey,
+    settings.openRouterApiKey,
+  ]);
   const selectedOpenRouterModel = selectedModelUsesOpenRouter
     ? (openRouterModelsBySlug.get(selectedModel) ?? null)
     : null;
@@ -5103,7 +5257,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
         return null;
       }
 
-      const providerForSend = templateOverridesForSend?.provider ?? selectedProvider;
+      const requestedProviderForSend = templateOverridesForSend?.provider ?? selectedProvider;
+      const providerForSend = lockedProvider ?? requestedProviderForSend;
       const modelForSend = resolveAppModelSelection(
         providerForSend,
         allModelOptionsByProvider[providerForSend].map((option) => option.slug),
@@ -5199,6 +5354,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       projectCommandTemplates,
       runStandaloneSlashCommand,
       runtimeMode,
+      lockedProvider,
       selectedModel,
       selectedProvider,
       selectedSkillNames,
@@ -5403,6 +5559,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
   const queueCurrentComposerTurn = useCallback(
     async (mode: "queue" | "steer") => {
+      if (isShiftPressedRef.current) {
+        return;
+      }
       if (!activeThread || !isServerThread) {
         return;
       }
@@ -5491,6 +5650,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
       if (!api || !activeThread || activeThread.id !== queuedTurn.threadId || !isServerThread) {
         return;
       }
+      const queuedProviderForSend = lockedProvider ?? queuedTurn.provider;
+      const queuedModelForSend = resolveAppModelSelection(
+        queuedProviderForSend,
+        allModelOptionsByProvider[queuedProviderForSend].map((option) => option.slug),
+        queuedTurn.model,
+      ) as ModelSlug;
+      const queuedModelOptionsForSend =
+        queuedProviderForSend === queuedTurn.provider ? queuedTurn.modelOptions : undefined;
+      const queuedProviderOptionsForSend = buildProviderOptionsForDispatch({
+        provider: queuedProviderForSend,
+        settings,
+      });
 
       const messageIdForSend = newMessageId();
       const messageCreatedAt = new Date().toISOString();
@@ -5527,7 +5698,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         await persistThreadSettingsForNextTurn({
           threadId: queuedTurn.threadId,
           createdAt: messageCreatedAt,
-          model: queuedTurn.model,
+          model: queuedModelForSend,
           runtimeMode: queuedTurn.runtimeMode,
           interactionMode: queuedTurn.interactionMode,
         });
@@ -5549,10 +5720,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
               })),
             ),
           },
-          provider: queuedTurn.provider,
-          model: queuedTurn.model,
+          provider: queuedProviderForSend,
+          model: queuedModelForSend,
           serviceTier: queuedTurn.serviceTier,
-          ...(queuedTurn.modelOptions ? { modelOptions: queuedTurn.modelOptions } : {}),
+          ...(queuedModelOptionsForSend ? { modelOptions: queuedModelOptionsForSend } : {}),
+          ...(queuedProviderOptionsForSend
+            ? { providerOptions: queuedProviderOptionsForSend }
+            : {}),
           assistantDeliveryMode: settings.enableAssistantStreaming ? "streaming" : "buffered",
           runtimeMode: queuedTurn.runtimeMode,
           interactionMode: queuedTurn.interactionMode,
@@ -5581,9 +5755,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
     },
     [
       activeThread,
+      allModelOptionsByProvider,
       beginSendPhase,
       forceStickToBottom,
       isServerThread,
+      lockedProvider,
       markQueuedTurnFailed,
       markQueuedTurnSending,
       persistThreadSettingsForNextTurn,
@@ -5592,7 +5768,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
       resetSendPhase,
       setThreadError,
       setThreadSendInFlight,
+      settings.codexBinaryPath,
+      settings.codexHomePath,
+      settings.copilotBinaryPath,
       settings.enableAssistantStreaming,
+      settings.kimiApiKey,
+      settings.kimiBinaryPath,
+      settings.openAiApiKey,
+      settings.openRouterApiKey,
+      settings.opencodeBinaryPath,
     ],
   );
 
@@ -5631,6 +5815,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
   const onSend = async (e?: { preventDefault: () => void }) => {
     e?.preventDefault();
+    if (
+      suppressComposerSendRef.current ||
+      Date.now() < suppressComposerSendGuardUntilRef.current
+    ) {
+      return;
+    }
     const api = readNativeApi();
     if (
       !api ||
@@ -5643,6 +5833,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
     }
     if (activePendingProgress) {
       onAdvanceActivePendingUserInput();
+      return;
+    }
+    if (isShiftPressedRef.current) {
       return;
     }
     const trimmed = prompt.trim();
@@ -6218,6 +6411,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
       if (!ensureSelectedOpenRouterModelSupportsTools(activeThread.id)) {
         return;
       }
+      const providerForSend = lockedProvider ?? selectedProvider;
+      const modelForSend = resolveAppModelSelection(
+        providerForSend,
+        allModelOptionsByProvider[providerForSend].map((option) => option.slug),
+        selectedModel,
+      ) as ModelSlug;
+      const modelOptionsForSend =
+        providerForSend === selectedProvider ? selectedModelOptionsForDispatch : undefined;
+      const providerOptionsForSend = buildProviderOptionsForDispatch({
+        provider: providerForSend,
+        settings,
+      });
 
       const threadIdForSend = activeThread.id;
       const messageIdForSend = newMessageId();
@@ -6243,7 +6448,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
         await persistThreadSettingsForNextTurn({
           threadId: threadIdForSend,
           createdAt: messageCreatedAt,
-          ...(selectedModel ? { model: selectedModel } : {}),
+          ...(modelForSend ? { model: modelForSend } : {}),
           runtimeMode,
           interactionMode: nextInteractionMode,
         });
@@ -6262,12 +6467,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
             text: trimmed,
             attachments: [],
           },
-          provider: selectedProvider,
-          model: selectedModel || undefined,
-          ...(selectedModelOptionsForDispatch
-            ? { modelOptions: selectedModelOptionsForDispatch }
+          provider: providerForSend,
+          model: modelForSend || undefined,
+          ...(modelOptionsForSend
+            ? { modelOptions: modelOptionsForSend }
             : {}),
-          ...(providerOptionsForDispatch ? { providerOptions: providerOptionsForDispatch } : {}),
+          ...(providerOptionsForSend ? { providerOptions: providerOptionsForSend } : {}),
           assistantDeliveryMode: settings.enableAssistantStreaming ? "streaming" : "buffered",
           runtimeMode,
           interactionMode: nextInteractionMode,
@@ -6296,6 +6501,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     },
     [
       activeThread,
+      allModelOptionsByProvider,
       beginSendPhase,
       ensureProviderCredentialsConfigured,
       ensureSelectedOpenRouterModelSupportsTools,
@@ -6304,17 +6510,25 @@ export default function ChatView({ threadId }: ChatViewProps) {
       isSendBusy,
       isThreadSendInFlight,
       isServerThread,
+      lockedProvider,
       persistThreadSettingsForNextTurn,
       resetSendPhase,
       runtimeMode,
       selectedModel,
       selectedModelOptionsForDispatch,
-      providerOptionsForDispatch,
       selectedProvider,
       setComposerDraftInteractionMode,
       setThreadSendInFlight,
       setThreadError,
+      settings.codexBinaryPath,
+      settings.codexHomePath,
+      settings.copilotBinaryPath,
       settings.enableAssistantStreaming,
+      settings.kimiApiKey,
+      settings.kimiBinaryPath,
+      settings.openAiApiKey,
+      settings.openRouterApiKey,
+      settings.opencodeBinaryPath,
     ],
   );
 
@@ -6338,17 +6552,28 @@ export default function ChatView({ threadId }: ChatViewProps) {
     if (!ensureSelectedOpenRouterModelSupportsTools(activeThread.id)) {
       return;
     }
+    const providerForSend = lockedProvider ?? selectedProvider;
+    const modelForSend = resolveAppModelSelection(
+      providerForSend,
+      allModelOptionsByProvider[providerForSend].map((option) => option.slug),
+      selectedModel ||
+        (activeThread.model as ModelSlug) ||
+        (activeProject.model as ModelSlug) ||
+        DEFAULT_MODEL_BY_PROVIDER[providerForSend],
+    ) as ModelSlug;
+    const modelOptionsForSend =
+      providerForSend === selectedProvider ? selectedModelOptionsForDispatch : undefined;
+    const providerOptionsForSend = buildProviderOptionsForDispatch({
+      provider: providerForSend,
+      settings,
+    });
 
     const createdAt = new Date().toISOString();
     const nextThreadId = newThreadId();
     const planMarkdown = activeProposedPlan.planMarkdown;
     const implementationPrompt = buildPlanImplementationPrompt(planMarkdown);
     const nextThreadTitle = truncateTitle(buildPlanImplementationThreadTitle(planMarkdown));
-    const nextThreadModel: ModelSlug =
-      selectedModel ||
-      (activeThread.model as ModelSlug) ||
-      (activeProject.model as ModelSlug) ||
-      DEFAULT_MODEL_BY_PROVIDER.codex;
+    const nextThreadModel: ModelSlug = modelForSend;
 
     setThreadSendInFlight(activeThread.id, true);
     beginSendPhase(activeThread.id, "sending-turn");
@@ -6382,12 +6607,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
             text: implementationPrompt,
             attachments: [],
           },
-          provider: selectedProvider,
-          model: selectedModel || undefined,
-          ...(selectedModelOptionsForDispatch
-            ? { modelOptions: selectedModelOptionsForDispatch }
+          provider: providerForSend,
+          model: modelForSend || undefined,
+          ...(modelOptionsForSend
+            ? { modelOptions: modelOptionsForSend }
             : {}),
-          ...(providerOptionsForDispatch ? { providerOptions: providerOptionsForDispatch } : {}),
+          ...(providerOptionsForSend ? { providerOptions: providerOptionsForSend } : {}),
           assistantDeliveryMode: settings.enableAssistantStreaming ? "streaming" : "buffered",
           runtimeMode,
           interactionMode: "default",
@@ -6430,6 +6655,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     activeProject,
     activeProposedPlan,
     activeThread,
+    allModelOptionsByProvider,
     beginSendPhase,
     ensureProviderCredentialsConfigured,
     ensureSelectedOpenRouterModelSupportsTools,
@@ -6437,15 +6663,23 @@ export default function ChatView({ threadId }: ChatViewProps) {
     isSendBusy,
     isThreadSendInFlight,
     isServerThread,
+    lockedProvider,
     navigate,
     resetSendPhase,
     runtimeMode,
     selectedModel,
     selectedModelOptionsForDispatch,
-    providerOptionsForDispatch,
     selectedProvider,
     setThreadSendInFlight,
+    settings.codexBinaryPath,
+    settings.codexHomePath,
+    settings.copilotBinaryPath,
     settings.enableAssistantStreaming,
+    settings.kimiApiKey,
+    settings.kimiBinaryPath,
+    settings.openAiApiKey,
+    settings.openRouterApiKey,
+    settings.opencodeBinaryPath,
     syncServerReadModel,
   ]);
   const saveOpenRouterApiKey = useCallback(() => {
@@ -6946,7 +7180,16 @@ export default function ChatView({ threadId }: ChatViewProps) {
     key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
     event: KeyboardEvent,
   ) => {
-    if (key === "Tab" && event.shiftKey) {
+    const shiftModifierActive =
+      event.shiftKey || event.getModifierState("Shift") || isShiftPressedRef.current;
+    const shiftEnter =
+      key === "Enter" &&
+      (shiftModifierActive || suppressComposerSendRef.current);
+    if (shiftEnter) {
+      suppressComposerSendForCurrentTick();
+      return false;
+    }
+    if (key === "Tab" && shiftModifierActive) {
       toggleInteractionMode();
       return true;
     }
@@ -6966,14 +7209,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
       }
       if (key === "Tab" || key === "Enter") {
         const selectedItem = activeComposerMenuItemRef.current ?? currentItems[0];
-        if (selectedItem) {
+        if (selectedItem && (key !== "Enter" || !shiftModifierActive)) {
           onSelectComposerItem(selectedItem);
           return true;
         }
       }
     }
 
-    if (key === "Enter" && !event.shiftKey) {
+    if (key === "Enter" && !shiftModifierActive) {
       if (
         phase === "running" &&
         pendingUserInputs.length === 0 &&
@@ -7369,6 +7612,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
             <form
               ref={composerFormRef}
               onSubmit={onSend}
+              onKeyDownCapture={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  (event.shiftKey || event.getModifierState("Shift")) &&
+                  isComposerContentEditableTarget(event.target)
+                ) {
+                  suppressComposerSendForCurrentTick();
+                }
+              }}
               className="mx-auto w-full min-w-0 max-w-6xl"
               data-chat-composer-form="true"
             >
@@ -7812,6 +8064,26 @@ export default function ChatView({ threadId }: ChatViewProps) {
                         onOpenUsageDashboard={() => setIsUsageDashboardOpen(true)}
                         onProviderModelChange={onProviderModelSelectFromPicker}
                       />
+                      {codexAuthSourceIndicator ? (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Badge
+                                variant={codexAuthSourceIndicator.variant}
+                                className={cn(
+                                  "max-w-36 shrink-0 truncate rounded-full px-2.5 py-0.5 text-[10px]",
+                                  isComposerFooterCompact ? "h-7" : "h-6",
+                                )}
+                              />
+                            }
+                          >
+                            {codexAuthSourceIndicator.label}
+                          </TooltipTrigger>
+                          <TooltipPopup side="top" className="max-w-64 whitespace-normal leading-relaxed">
+                            {codexAuthSourceIndicator.description}
+                          </TooltipPopup>
+                        </Tooltip>
+                      ) : null}
 
                       <ComposerSkillPicker
                         skills={projectSkills}
@@ -8077,6 +8349,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                               type="button"
                               size="sm"
                               className="rounded-full px-4"
+                              disabled={isShiftPressed}
                               onClick={() => void queueCurrentComposerTurn(followUpMode)}
                             >
                               {followUpMode === "queue" ? chatCopy.queueFollowUp : chatCopy.sendNow}
@@ -8141,7 +8414,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                               type="submit"
                               size="sm"
                               className="h-9 rounded-full px-4 sm:h-8"
-                              disabled={isSendBusy || isConnecting}
+                              disabled={isSendBusy || isConnecting || isShiftPressed}
                             >
                               {isConnecting || isSendBusy ? "Sending..." : "Refine"}
                             </Button>
@@ -8151,7 +8424,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                                 type="submit"
                                 size="sm"
                                 className="h-9 rounded-l-full rounded-r-none px-4 sm:h-8"
-                                disabled={isSendBusy || isConnecting}
+                                disabled={isSendBusy || isConnecting || isShiftPressed}
                               >
                                 {isConnecting || isSendBusy ? "Sending..." : "Implement"}
                               </Button>
@@ -8163,7 +8436,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                                       variant="default"
                                       className="h-9 rounded-l-none rounded-r-full border-l-white/12 px-2 sm:h-8"
                                       aria-label="Implementation actions"
-                                      disabled={isSendBusy || isConnecting}
+                                      disabled={isSendBusy || isConnecting || isShiftPressed}
                                     />
                                   }
                                 >
@@ -8171,7 +8444,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                                 </MenuTrigger>
                                 <MenuPopup align="end" side="top">
                                   <MenuItem
-                                    disabled={isSendBusy || isConnecting}
+                                    disabled={isSendBusy || isConnecting || isShiftPressed}
                                     onClick={() => void onImplementPlanInNewThread()}
                                   >
                                     Implement in new thread
@@ -8189,6 +8462,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                               isSendBusy ||
                               isConnecting ||
                               hasQueuedTurns ||
+                              isShiftPressed ||
                               (!prompt.trim() && composerImages.length === 0)
                             }
                             aria-label={
@@ -9513,6 +9787,18 @@ function getChatSurfaceCopy(language: AppLanguage) {
       fastMode: "حالت سریع",
       mode: "حالت",
       access: "دسترسی",
+      authSourceOpenAiKey: "کلید OpenAI",
+      authSourceOpenAiKeyHint:
+        "این مدل Codex از کلید API اختصاصی OpenAI که در Draft ذخیره کرده‌اید استفاده می کند.",
+      authSourceOpenRouterKey: "کلید OpenRouter",
+      authSourceOpenRouterKeyHint:
+        "این مدل از کلید API OpenRouter که در Draft ذخیره کرده‌اید استفاده می کند.",
+      authSourceOpenRouterMissing: "کلید OpenRouter لازم است",
+      authSourceOpenRouterMissingHint:
+        "قبل از ارسال با این مدل، در تنظیمات Draft یک کلید API OpenRouter اضافه کنید.",
+      authSourceFallback: "احراز هویت جایگزین",
+      authSourceFallbackHint:
+        "کلید OpenAI اختصاصی تنظیم نشده است؛ Codex از مسیر جایگزین CLI/متغیرهای محیطی استفاده می کند.",
       comingSoon: "به زودی",
       authenticatedModels: (count: number) => `${count} مدل احراز شده${count === 1 ? "" : ""}`,
       defaultChoice: "پیش فرض",
@@ -9570,6 +9856,18 @@ function getChatSurfaceCopy(language: AppLanguage) {
     fastMode: "Fast mode",
     mode: "Mode",
     access: "Access",
+    authSourceOpenAiKey: "OpenAI key",
+    authSourceOpenAiKeyHint:
+      "This Codex model is using the dedicated OpenAI API key saved in Draft settings.",
+    authSourceOpenRouterKey: "OpenRouter key",
+    authSourceOpenRouterKeyHint:
+      "This model is using the OpenRouter API key saved in Draft settings.",
+    authSourceOpenRouterMissing: "OpenRouter key needed",
+    authSourceOpenRouterMissingHint:
+      "Add an OpenRouter API key in Settings before sending with this model.",
+    authSourceFallback: "Fallback auth",
+    authSourceFallbackHint:
+      "No dedicated OpenAI key is configured, so Codex will use CLI/environment fallback auth.",
     comingSoon: "Coming soon",
     authenticatedModels: (count: number) => `${count} authenticated model${count === 1 ? "" : "s"}`,
     defaultChoice: "Default",
@@ -10937,9 +11235,9 @@ const OpenInPicker = memo(function OpenInPicker({
   const allOptions = useMemo<Array<{ label: string; Icon: Icon; value: EditorId }>>(
     () => [
       {
-        label: "Cursor",
-        Icon: CursorIcon,
-        value: "cursor",
+        label: "Warp",
+        Icon: WarpIcon,
+        value: "warp",
       },
       {
         label: "VS Code",
@@ -10950,6 +11248,11 @@ const OpenInPicker = memo(function OpenInPicker({
         label: "VS Code Insiders",
         Icon: VisualStudioCodeInsiders,
         value: "vscode-insiders",
+      },
+      {
+        label: "Sublime Text",
+        Icon: SublimeTextIcon,
+        value: "sublime",
       },
       {
         label: "Zed",

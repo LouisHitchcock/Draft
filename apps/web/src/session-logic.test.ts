@@ -1050,6 +1050,109 @@ describe("deriveWorkLogEntries", () => {
       "apps/web/src/session-logic.ts",
     ]);
   });
+
+  it("derives changedFiles and fileDiffs from structured fileDiff payloads", () => {
+    const diffA = [
+      "diff --git a/apps/web/src/a.ts b/apps/web/src/a.ts",
+      "--- a/apps/web/src/a.ts",
+      "+++ b/apps/web/src/a.ts",
+      "@@ -1,1 +1,1 @@",
+      "-old-a",
+      "+new-a",
+    ].join("\n");
+    const diffB = [
+      "diff --git a/apps/web/src/b.ts b/apps/web/src/b.ts",
+      "--- a/apps/web/src/b.ts",
+      "+++ b/apps/web/src/b.ts",
+      "@@ -1,1 +1,1 @@",
+      "-old-b",
+      "+new-b",
+    ].join("\n");
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "file-tool-structured-diffs",
+        kind: "tool.completed",
+        summary: "File change",
+        payload: {
+          itemType: "file_change",
+          fileDiffs: [
+            { path: "apps/web/src/a.ts", diff: diffA },
+            { path: "apps/web/src/b.ts", diff: diffB },
+          ],
+          data: {},
+        },
+      }),
+    ];
+
+    const [entry] = deriveWorkLogEntries(activities, undefined);
+    expect(entry).toMatchObject({
+      itemType: "file_change",
+      changedFiles: ["apps/web/src/a.ts", "apps/web/src/b.ts"],
+      fileDiffs: [
+        { path: "apps/web/src/a.ts", diff: diffA },
+        { path: "apps/web/src/b.ts", diff: diffB },
+      ],
+    });
+  });
+
+  it("extracts unified diff detail for file-change tool activities", () => {
+    const diffText = [
+      "diff --git a/apps/web/src/routes/draft.tsx b/apps/web/src/routes/draft.tsx",
+      "--- a/apps/web/src/routes/draft.tsx",
+      "+++ b/apps/web/src/routes/draft.tsx",
+      "@@ -1,1 +1,1 @@",
+      "-old",
+      "+new",
+    ].join("\n");
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "file-tool-diff",
+        kind: "tool.completed",
+        summary: "File change",
+        payload: {
+          itemType: "file_change",
+          data: {
+            item: {
+              changes: [{ path: "apps/web/src/routes/draft.tsx" }],
+              result: {
+                output: diffText,
+              },
+            },
+          },
+        },
+      }),
+    ];
+
+    const [entry] = deriveWorkLogEntries(activities, undefined);
+    expect(entry).toMatchObject({
+      itemType: "file_change",
+      changedFiles: ["apps/web/src/routes/draft.tsx"],
+      detail: diffText,
+    });
+  });
+
+  it("falls back to payload message for runtime-error work-log detail", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "runtime-error-entry",
+        kind: "runtime.error",
+        summary: "Runtime error",
+        tone: "error",
+        payload: {
+          message: "runtime exploded while running command",
+          itemId: "item-runtime-123",
+        },
+      }),
+    ];
+
+    const [entry] = deriveWorkLogEntries(activities, undefined);
+    expect(entry).toMatchObject({
+      id: "runtime-error-entry",
+      tone: "error",
+      detail: "runtime exploded while running command",
+      itemId: "item-runtime-123",
+    });
+  });
 });
 
 describe("deriveThreadTasks", () => {

@@ -6,6 +6,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export interface PersistedProviderSecretRequirements {
   readonly codex?: {
+    readonly openAiApiKey?: true;
     readonly openRouterApiKey?: true;
   };
   readonly opencode?: {
@@ -114,10 +115,17 @@ export function deriveProviderSecretRequirements(
   if (!providerOptions) {
     return undefined;
   }
+  const codexOpenAiApiKey = trimSecret(providerOptions.codex?.openAiApiKey);
+  const codexOpenRouterApiKey = trimSecret(providerOptions.codex?.openRouterApiKey);
 
   const next = {
-    ...(trimSecret(providerOptions.codex?.openRouterApiKey)
-      ? { codex: { openRouterApiKey: true as const } }
+    ...(codexOpenAiApiKey || codexOpenRouterApiKey
+      ? {
+          codex: {
+            ...(codexOpenAiApiKey ? { openAiApiKey: true as const } : {}),
+            ...(codexOpenRouterApiKey ? { openRouterApiKey: true as const } : {}),
+          },
+        }
       : {}),
     ...(trimSecret(providerOptions.opencode?.openRouterApiKey)
       ? { opencode: { openRouterApiKey: true as const } }
@@ -134,10 +142,18 @@ export function sanitizeProviderSecretRequirementsRecord(
   if (!isRecord(value)) {
     return undefined;
   }
+  const codexRequirements = {
+    ...(isRecord(value.codex) && value.codex.openAiApiKey === true
+      ? { openAiApiKey: true as const }
+      : {}),
+    ...(isRecord(value.codex) && value.codex.openRouterApiKey === true
+      ? { openRouterApiKey: true as const }
+      : {}),
+  };
 
   const next = {
-    ...(isRecord(value.codex) && value.codex.openRouterApiKey === true
-      ? { codex: { openRouterApiKey: true as const } }
+    ...(Object.keys(codexRequirements).length > 0
+      ? { codex: codexRequirements }
       : {}),
     ...(isRecord(value.opencode) && value.opencode.openRouterApiKey === true
       ? { opencode: { openRouterApiKey: true as const } }
@@ -159,6 +175,7 @@ export function hydrateProviderOptionsWithEnvironment(input: {
   readonly missingSecrets: ReadonlyArray<string>;
 } {
   const env = input.env ?? process.env;
+  const openAiApiKey = trimSecret(env.OPENAI_API_KEY);
   const openRouterApiKey = trimSecret(env.OPENROUTER_API_KEY);
   const kimiApiKey = trimSecret(env.KIMI_API_KEY);
   const missingSecrets = new Set<string>();
@@ -168,6 +185,17 @@ export function hydrateProviderOptionsWithEnvironment(input: {
     ...(input.providerOptions?.opencode ? { opencode: { ...input.providerOptions.opencode } } : {}),
     ...(input.providerOptions?.kimi ? { kimi: { ...input.providerOptions.kimi } } : {}),
   };
+  if (input.secretRequirements?.codex?.openAiApiKey) {
+    if (openAiApiKey) {
+      const existingCodex = isRecord(providerOptions.codex) ? providerOptions.codex : {};
+      providerOptions.codex = {
+        ...existingCodex,
+        openAiApiKey,
+      };
+    } else {
+      missingSecrets.add("OPENAI_API_KEY");
+    }
+  }
 
   if (input.secretRequirements?.codex?.openRouterApiKey) {
     if (openRouterApiKey) {

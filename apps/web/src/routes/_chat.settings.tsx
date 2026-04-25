@@ -132,6 +132,14 @@ function getSettingsCopy(language: AppLanguage) {
       leaveBlankCodex: "برای استفاده از codex از PATH این کادر را خالی بگذارید.",
       codexHomePath: "مسیر CODEX_HOME",
       codexHomeDescription: "شاخه خانگی/پیکربندی سفارشی Codex (اختیاری).",
+      openAiApiKey: "کلید API OpenAI",
+      openAiApiDescription: (electron: boolean) =>
+        electron
+          ? "اختیاری است و فقط برای نشست های Codex غیر OpenRouter استفاده می شود. Draft آن را در نشست دسکتاپ نگه می دارد و در صورت وجود ذخیره سازی امن، در مخزن اعتبار سیستم عامل ذخیره می کند."
+          : "اختیاری است و فقط برای نشست های Codex غیر OpenRouter استفاده می شود. Draft آن را فقط در حافظه نشست فعلی مرورگر نگه می دارد.",
+      openAiConfigured: "کلید OpenAI برای نشست های جدید Codex تنظیم شده است.",
+      openAiMissing: "کلید OpenAI جداگانه تنظیم نشده است.",
+      resetOpenAiKey: "بازنشانی کلید OpenAI",
       binarySource: "منبع باینری",
       resetCodexOverrides: "بازنشانی بازنویسی های Codex",
       openRouterTitle: "OpenRouter",
@@ -338,6 +346,14 @@ function getSettingsCopy(language: AppLanguage) {
     leaveBlankCodex: "Leave blank to use codex from your PATH.",
     codexHomePath: "CODEX_HOME path",
     codexHomeDescription: "Optional custom Codex home/config directory.",
+    openAiApiKey: "OpenAI API key",
+    openAiApiDescription: (electron: boolean) =>
+      electron
+        ? "Optional and used only for non-OpenRouter Codex sessions. Draft keeps it in the desktop session and persists it in your OS credential store when secure storage is available."
+        : "Optional and used only for non-OpenRouter Codex sessions. Draft keeps it only in memory for the current browser session.",
+    openAiConfigured: "OpenAI key is configured for new Codex sessions.",
+    openAiMissing: "No dedicated OpenAI key configured.",
+    resetOpenAiKey: "Reset OpenAI key",
     binarySource: "Binary source",
     resetCodexOverrides: "Reset codex overrides",
     openRouterTitle: "OpenRouter",
@@ -688,6 +704,7 @@ function SettingsRouteView() {
 
   const codexBinaryPath = settings.codexBinaryPath;
   const codexHomePath = settings.codexHomePath;
+  const openAiApiKey = settings.openAiApiKey;
   const openRouterApiKey = settings.openRouterApiKey;
   const copilotBinaryPath = settings.copilotBinaryPath;
   const opencodeBinaryPath = settings.opencodeBinaryPath;
@@ -1377,6 +1394,40 @@ function SettingsRouteView() {
                   />
                   <span className="text-xs text-muted-foreground">{copy.codexHomeDescription}</span>
                 </label>
+
+                <label htmlFor="openai-api-key" className="block space-y-1">
+                  <span className="text-xs font-medium text-foreground">{copy.openAiApiKey}</span>
+                  <Input
+                    id="openai-api-key"
+                    dir="ltr"
+                    type="password"
+                    value={openAiApiKey}
+                    onChange={(event) => updateSettings({ openAiApiKey: event.target.value })}
+                    placeholder="sk-..."
+                    autoComplete="new-password"
+                    spellCheck={false}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {copy.openAiApiDescription(isElectron)}
+                  </span>
+                </label>
+
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <p>
+                    {openAiApiKey.trim().length > 0 ? copy.openAiConfigured : copy.openAiMissing}
+                  </p>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    onClick={() =>
+                      updateSettings({
+                        openAiApiKey: defaults.openAiApiKey,
+                      })
+                    }
+                  >
+                    {copy.resetOpenAiKey}
+                  </Button>
+                </div>
 
                 <div className="flex flex-col gap-3 text-xs text-muted-foreground sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
